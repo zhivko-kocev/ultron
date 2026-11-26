@@ -1,14 +1,16 @@
 set $mod Mod4
-set $ws1 "1:boss"
-set $ws2 "2:review"
-set $ws3 "3:web"
-set $ws4 "4:watch"
-set $ws5 "5:code"
-set $ws6 "6:term"
-set $ws7 "7:chat"
-set $ws8 "8"
-set $ws9 "9"
-set $ws10 "10:sys"
+# No quotes: the names have no spaces, and a quoted $ws1 in the config's last `workspace` line
+# made a second workspace literally named "1:boss" (quotes included).
+set $ws1 1:boss
+set $ws2 2:review
+set $ws3 3:web
+set $ws4 4:watch
+set $ws5 5:code
+set $ws6 6:term
+set $ws7 7:chat
+set $ws8 8
+set $ws9 9
+set $ws10 10:sys
 include /etc/sway/config.d/*
 font pango:JetBrains Mono 10
 output * bg #282828 solid_color

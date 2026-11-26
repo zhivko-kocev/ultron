@@ -2,13 +2,13 @@
 # ultron install [step...]: install or repair the system, one idempotent step at a time.
 # Also provides run_steps and the step helpers shared with `ultron update` and `ultron doctor`.
 
-ULTRON_DEFAULT_STEPS=(preflight pacman dotfiles packages hardware aur system boot ai docker desktop agents verify)
+ULTRON_DEFAULT_STEPS=(preflight dotfiles packages hardware aur system boot ai docker desktop agents)
 ULTRON_EXTRA_STEPS=(jocasta net ntfy)
 # Requested steps always run in this order. net/ntfy come before agents and jocasta, so every root step
 # is done (and the sudo ticket dropped) before mise and Jocasta's build run third-party code.
-ULTRON_STEP_ORDER=(preflight pacman dotfiles packages hardware aur system boot ai docker desktop net ntfy agents jocasta verify)
+ULTRON_STEP_ORDER=(preflight dotfiles packages hardware aur system boot ai docker desktop net ntfy agents jocasta)
 # Steps that use sudo. jocasta is left out: it does its one root change itself, then drops the ticket.
-ULTRON_ROOT_STEPS=(pacman dotfiles packages hardware aur system boot ai desktop net ntfy)
+ULTRON_ROOT_STEPS=(dotfiles packages hardware aur system boot ai desktop net ntfy)
 ULTRON_TOOLS_CONF=/etc/mise/conf.d/ultron-tools.toml
 # A Limine kernel entry; Limine 9+ names the kernel `path:` (older: `kernel_path:`).
 LIMINE_KERNEL_RE='^[[:space:]]*(kernel_)?path:[[:space:]]*boot\(\)'
@@ -54,14 +54,6 @@ jocasta_omp_want() {
     head -n1 | grep -oE '[0-9]+(\.[0-9]+)*$' || true
 }
 
-# mise_gh ARGS...: mise with the gh login's token, so its GitHub release lookups aren't held to the anonymous
-# limit of 60 requests an hour (hit in testing). Only mise sees the token: never AUR builds or project scripts.
-mise_gh() {
-  local token=""
-  if have gh; then token=$(gh auth token 2>/dev/null || true); fi
-  if [[ -n "$token" ]]; then MISE_GITHUB_TOKEN=$token mise "$@"; else mise "$@"; fi
-}
-
 # set_omp_settings: the omp settings ultron needs; `jocasta setup` and a restored config may reset them,
 # so the agents step, the jocasta step and `migrate restore` reapply them.
 #  - commit role (LOCAL_AI=yes only): the local model first, then whatever non-local models were there.
@@ -85,15 +77,6 @@ set_omp_settings() {
     fi
   fi
   omp config set power.sleepPrevention off >/dev/null || warn "couldn't turn off omp's idle inhibitor"
-}
-
-_in_list() {
-  local needle=$1 s
-  shift
-  for s in "$@"; do
-    if [[ "$s" == "$needle" ]]; then return 0; fi
-  done
-  return 1
 }
 
 # confirm_checkout: before the first sudo, make sure the code about to run as root is the committed ultron.
@@ -123,20 +106,56 @@ run_hook() {
 }
 
 # run_steps STEP...: source lib/install/<step>.sh and run step_<step>, in the given order.
+# With ULTRON_STEP_FILE set, the running step's name is kept in that file (emptied when it's done).
 run_steps() {
   local s
   export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
   for s in "$@"; do
     say "step: $s"
+    if [[ -n "${ULTRON_STEP_FILE:-}" ]]; then printf '%s\n' "$s" >"$ULTRON_STEP_FILE"; fi
     # shellcheck source=/dev/null
     source "$ULTRON_ROOT/lib/install/$s.sh"
     "step_$s"
+    if [[ -n "${ULTRON_STEP_FILE:-}" ]]; then : >"$ULTRON_STEP_FILE"; fi
     ok "step $s done"
   done
 }
 
+# _install_first_boot: `ultron install --first-boot`, started by the first login on tty1 (bootstrap.sh arms
+# it): the default steps, then a reboot into the desktop. A failure names the step and returns to the shell;
+# the first-boot files stay until the desktop step removes them, so until then each login on tty1 retries.
+_install_first_boot() {
+  local step_file step
+  # The autologin is quicker than NetworkManager joining the Wi-Fi network bootstrap.sh carried over.
+  nm-online -q -t 30 >/dev/null 2>&1 || true
+  step_file=$(mktemp)
+  # A child process, so a failing step stops the install (set -e is off inside an `if` condition).
+  if ULTRON_STEP_FILE=$step_file "$ULTRON_ROOT/bin/ultron" install; then
+    rm -f "$step_file"
+    say "Starting the desktop in 10 s (Ctrl+C to stay here)"
+    sleep 10
+    systemctl reboot
+    return 0
+  fi
+  step=$(cat "$step_file")
+  rm -f "$step_file"
+  echo
+  warn "The install stopped${step:+ in step $step} (the error is above)."
+  if ! curl -fsI --max-time 10 https://archlinux.org >/dev/null 2>&1; then
+    echo "No internet: run nmtui, pick 'Activate a connection' and join your network, then run: ultron install --first-boot"
+  else
+    echo "Fix it, then run: ultron install --first-boot"
+  fi
+  return 1
+}
+
 cmd_install() {
   local s steps=() last_root=""
+  if [[ "${1:-}" == --first-boot ]]; then
+    (($# == 1)) || die "--first-boot runs the default steps: give it no step names."
+    _install_first_boot
+    return
+  fi
   for s in "$@"; do
     _in_list "$s" "${ULTRON_STEP_ORDER[@]}" ||
       die "unknown step '$s'. Steps: ${ULTRON_DEFAULT_STEPS[*]}; on demand: ${ULTRON_EXTRA_STEPS[*]}"
@@ -160,8 +179,12 @@ cmd_install() {
     run_steps "$s"
     if [[ "$s" == "$last_root" ]]; then sudo_drop; fi
   done
+  if ((!$#)); then
+    "$ULTRON_ROOT/bin/ultron" doctor || die "doctor found problems (the FAIL lines above); fix them and rerun: ultron doctor"
+  fi
   run_hook post-install
-  if ! systemctl is-active -q greetd; then
+  # Under --first-boot (ULTRON_STEP_FILE set) the parent reboots by itself.
+  if [[ -z "${ULTRON_STEP_FILE:-}" ]] && ! systemctl is-active -q greetd; then
     say "Reboot to start the desktop"
   fi
 }

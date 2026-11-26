@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# ultron jump N [--con-id C | --app-id A]: move the user to workspace N, after the typing guard.
+# ultron jump N [--con-id C]: move the user to workspace N, after the typing guard.
 
 cmd_jump() {
   local n=${1:-}
-  [[ -n "$n" ]] || die "usage: ultron jump N [--con-id C | --app-id A]"
+  [[ -n "$n" ]] || die "usage: ultron jump N [--con-id C]"
   shift
   local ws crit=""
   ws=$(ws_name "$n")
@@ -12,11 +12,6 @@ cmd_jump() {
     --con-id)
       [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--con-id needs a number"
       crit="[con_id=$2]"
-      shift 2
-      ;;
-    --app-id)
-      [[ -n "${2:-}" ]] || die "--app-id needs a value"
-      crit="[app_id=\"^${2}\$\"]"
       shift 2
       ;;
     *) die "jump: unknown option '$1'" ;;
@@ -44,9 +39,6 @@ cmd_jump() {
     return 0
   fi
 
-  local cur
-  cur=$(focused_ws)
-  if [[ "$cur" != "$ws" ]]; then printf '%s\n' "$cur" >"$R/back"; fi
-  swaymsg "workspace \"$ws\"" >/dev/null
+  goto_ws "$ws"
   if [[ -n "$crit" ]]; then swaymsg "$crit focus" >/dev/null 2>&1 || true; fi
 }

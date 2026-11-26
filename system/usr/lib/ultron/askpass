@@ -117,10 +117,17 @@ for bad in $'\u202a' $'\u202b' $'\u202c' $'\u202d' $'\u202e' $'\u2066' $'\u2067'
   [[ $command != *"$bad"* ]] || refuse "The command contains hidden text-direction characters."
 done
 
-# Typing guard: wait up to 30 s until there has been no input for 2 s.
+# One popup at a time: a second request waits here until the first one is answered.
+mkdir -p "$rundir"
+exec 9>"$rundir/askpass.lock"
+flock 9
+
+# Typing guard: wait up to 30 s until there has been no input for 2 s. The wait is a read that times
+# out on a pipe nobody writes to (no process started per tick).
+exec {nap_fd}<> <(:)
 for ((n = 0; n < 300; n++)); do
   [[ -e $rundir/idle2 ]] && break
-  sleep 0.1
+  read -rt 0.1 -u "$nap_fd" _ || true
 done
 
 text="$command"$'\n'"in $folder"
@@ -158,6 +165,8 @@ note_id=$(notify-send -p -u critical -a ultron "Root access requested" "$body" 2
 mesg="Run as root: $command"$'\n'"in $folder"
 [[ -n $label ]] && mesg="$label"$'\n'"$mesg"
 rc=0
+# fuzzel refuses to start while another fuzzel (the launcher, the menu) is open: wait for it to close.
+flock -w 600 "$XDG_RUNTIME_DIR/fuzzel-$WAYLAND_DISPLAY.lock" true || true
 timeout 600 fuzzel --dmenu --password --lines 0 --width 80 --prompt "sudo ▸ " --mesg "$mesg" </dev/null || rc=$?
 if [[ -n $note_id ]]; then makoctl dismiss -n "$note_id" >/dev/null 2>&1 || true; fi
 exit "$rc"

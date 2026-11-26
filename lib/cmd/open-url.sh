@@ -21,17 +21,3 @@ cmd_open_url() {
     cmd_browser "$url"
   fi
 }
-
-# _url_host URL: lowercased host of an http(s) URL ("[::1]" keeps its brackets); empty otherwise.
-_url_host() {
-  local url=$1 auth host
-  [[ "$url" =~ ^[hH][tT][tT][pP][sS]?://([^/?#]*) ]] || return 0
-  auth=${BASH_REMATCH[1]}
-  auth=${auth##*@}
-  if [[ "$auth" == \[* ]]; then
-    host="${auth%%]*}]"
-  else
-    host=${auth%%:*}
-  fi
-  printf '%s\n' "${host,,}"
-}

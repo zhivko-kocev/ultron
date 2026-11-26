@@ -17,7 +17,7 @@ JOCASTA_DIR="$HOME/Projects/jocasta"
 JOCASTA_INSTALL_DIR="$HOME/.local/lib/jocasta"
 AGENT_BIN="$HOME/.local/lib/ultron/agent-bin"
 
-# Runtime state ($R): idle2, away, focus, back, needs-you, jump.lock.
+# Runtime state ($R): idle2, away, focus, needs-you, jump.lock, pkg.lock.
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
 R="$XDG_RUNTIME_DIR/ultron"
@@ -49,6 +49,57 @@ is_laptop() { compgen -G "/sys/class/power_supply/BAT*" >/dev/null; }
 in_sway() { [[ -n "${SWAYSOCK:-}" ]] && swaymsg -t get_version >/dev/null 2>&1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 ensure_rundir() { mkdir -p "$R"; }
+
+# _in_list NEEDLE ITEM...: 0 when NEEDLE is one of the items.
+_in_list() {
+  local needle=$1 s
+  shift
+  for s in "$@"; do
+    if [[ "$s" == "$needle" ]]; then return 0; fi
+  done
+  return 1
+}
+
+# _url_host URL: lowercased host of an http(s) URL, without user info or port ("[::1]" keeps its brackets);
+# empty otherwise.
+_url_host() {
+  local url=$1 auth host
+  [[ "$url" =~ ^[hH][tT][tT][pP][sS]?://([^/?#]*) ]] || return 0
+  auth=${BASH_REMATCH[1]}
+  auth=${auth##*@}
+  if [[ "$auth" == \[* ]]; then
+    host="${auth%%]*}]"
+  else
+    host=${auth%%:*}
+  fi
+  printf '%s\n' "${host,,}"
+}
+
+# nap SECONDS: sleep without starting a process: a read that times out on a pipe nobody writes to.
+_NAP_FD=""
+nap() {
+  if [[ -z "$_NAP_FD" ]]; then exec {_NAP_FD}<> <(:); fi
+  read -rt "$1" -u "$_NAP_FD" _ || true
+}
+
+# mise_gh ARGS...: mise with the gh login's token, so its GitHub release lookups aren't held to the anonymous
+# limit of 60 requests an hour (hit in testing). Only mise sees the token: never AUR builds or project scripts.
+mise_gh() {
+  local token=${MISE_GITHUB_TOKEN:-}
+  if [[ -z "$token" ]] && have gh; then token=$(gh auth token 2>/dev/null || true); fi
+  if [[ -n "$token" ]]; then MISE_GITHUB_TOKEN=$token mise "$@"; else mise "$@"; fi
+}
+
+# pkg_lock: wait for any other package change started by ultron (pkg, update); held until this process exits.
+# pacman runs one change at a time and fails instead of waiting.
+pkg_lock() {
+  ensure_rundir
+  exec 8>"$R/pkg.lock"
+  flock -n 8 || {
+    say "Waiting for another package change (ultron pkg or update) to finish"
+    flock 8
+  }
+}
 
 # ultron_repo_url: where this checkout came from (a fork installs from itself).
 ultron_repo_url() {
@@ -97,7 +148,6 @@ conf_load() {
   _CONF_LOADED=1
 }
 
-conf_keys() { printf '%s\n' "${_CONF_KEYS[@]}"; }
 conf_default() { printf '%s\n' "${_CONF_DEFAULT[$1]-}"; }
 
 # conf_var VAR KEY [DEFAULT]: the setting into VAR (no subshell): else DEFAULT, else the built-in default.
@@ -120,15 +170,19 @@ conf_get() {
 # conf_set KEY VALUE: create or replace KEY=VALUE in ultron.conf (the machine's own file). An empty
 # VALUE removes the line, so conf.d or the built-in default applies again.
 conf_set() {
-  local key=$1 val=$2 tmp
+  local key=$1 val=$2 tmp lock
   [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "not a setting name: $key"
   [[ "$val" != *$'\n'* ]] || die "a setting can't span lines"
   mkdir -p "$ULTRON_CONF_DIR"
+  # Two changes at once would each rewrite the file from the same old copy: one waits for the other.
+  exec {lock}>"$ULTRON_CONF_DIR/.lock"
+  flock "$lock"
   [[ -e "$ULTRON_CONF" ]] || : >"$ULTRON_CONF"
   tmp=$(mktemp "$ULTRON_CONF_DIR/.ultron.conf.XXXXXX")
   grep -v -E "^[[:space:]]*${key}[[:space:]]*=" "$ULTRON_CONF" >"$tmp" || true
   if [[ -n "$val" ]]; then printf '%s=%s\n' "$key" "$val" >>"$tmp"; fi
   mv "$tmp" "$ULTRON_CONF"
+  exec {lock}>&-
   _CONF_LOADED=0
 }
 
@@ -190,13 +244,6 @@ theme_load() {
   _THEME_LOADED=$name
 }
 
-# theme_get KEY: a palette value of the current theme (hex without #). In a loop, call theme_load
-# once and read ${_THEME[KEY]} instead.
-theme_get() {
-  [[ -n "$_THEME_LOADED" ]] || theme_load
-  printf '%s\n' "${_THEME[$1]-}"
-}
-
 # ---- boss, phone, presence ----------------------------------------------------------
 
 jocasta_data_dir() { printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/jocasta/data"; }
@@ -219,7 +266,7 @@ wait_idle() {
   ensure_rundir
   until [[ -e "$R/idle2" ]]; do
     ((waited >= limit * 10)) && return 1
-    sleep 0.1
+    nap 0.1
     waited=$((waited + 1))
   done
 }
@@ -240,7 +287,7 @@ wait_window() {
       printf '%s\n' "$id"
       return 0
     fi
-    sleep 0.1
+    nap 0.1
   done
   return 1
 }
@@ -256,12 +303,15 @@ wait_new_window() {
         return 0
       fi
     done < <(sway_ids "$filter")
-    sleep 0.1
+    nap 0.1
   done
   return 1
 }
 
 focused_ws() { swaymsg -t get_workspaces | jq -r '.[] | select(.focused) | .name'; }
+
+# goto_ws NAME: switch to the workspace NAME.
+goto_ws() { swaymsg "workspace \"$1\"" >/dev/null; }
 focused_app_id() { swaymsg -t get_tree | jq -r '[.. | objects | select(.focused == true)] | .[0].app_id // ""'; }
 focused_title() { swaymsg -t get_tree | jq -r '[.. | objects | select(.focused == true)] | .[0].name // ""'; }
 
@@ -330,6 +380,7 @@ _ULTRON_SUDO_PID=""
 
 # sudo_keepalive: ask once, refresh in the background until sudo_drop or this shell's exit.
 sudo_keepalive() {
+  [[ "$(command -v sudo)" != "$AGENT_BIN/sudo" ]] || die "Run this in your own terminal (Super+Ctrl+U): an agent's sudo asks once per command."
   [[ -z "$_ULTRON_SUDO_PID" ]] || return 0
   sudo -v || die "sudo failed"
   # No inherited stdout/stderr: a leftover `sleep` would otherwise keep `ultron install | tee log` open.

@@ -4,7 +4,7 @@
 
 - **The boss window.** Workspace 1 holds one agent you talk to all day: the boss. It starts at login; Super+B takes you there.
 - **Three agent workspaces.** Agents open windows only on 2 (review: diffs, files, test runs), 3 (web: local pages in a separate preview browser) and 4 (watch: live terminals). They never move you; ultron does, and only when you stop typing for 2 seconds.
-- **Attention.** When an agent needs you, ultron brings you to that agent's window (the boss window, or the terminal the agent runs in). In focus mode (Super+M) it marks the window urgent instead. Super+A goes to whatever needs you, Super+Backspace takes you back.
+- **Attention.** When an agent needs you, ultron brings you to that agent's window (the boss window, or the terminal the agent runs in). In focus mode (Super+M) it marks the window urgent instead. Super+A goes to whatever needs you, Super+Backspace takes you back to your last workspace.
 - **Phone alerts.** When you are away (screen locked, or no input for a while), questions and finished work go to your phone instead (after `ultron install net ntfy`).
 - **sudo popup.** An agent's `sudo` shows a password popup with the exact command and folder. Your own terminals keep the normal prompt. What this does and doesn't protect you from: [security.md](security.md).
 - **Rootless Docker.** Agents can build and run containers without root access to the PC.

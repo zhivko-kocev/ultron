@@ -86,14 +86,8 @@ _agent_add() {
 
   if [[ "$tool" != - ]]; then
     have mise || die "mise isn't installed: run 'ultron install packages agents' first"
-    local token=${MISE_GITHUB_TOKEN:-}
-    if [[ -z "$token" ]] && have gh; then token=$(gh auth token 2>/dev/null || true); fi
     say "Installing $name ($tool) with mise"
-    if [[ -n "$token" ]]; then
-      MISE_GITHUB_TOKEN=$token mise use -g "$tool@latest" || die "mise couldn't install $tool (try: mise use -g $tool@latest)"
-    else
-      mise use -g "$tool@latest" || die "mise couldn't install $tool (try: mise use -g $tool@latest)"
-    fi
+    mise_gh use -g "$tool@latest" || die "mise couldn't install $tool (try: mise use -g $tool@latest)"
     mise reshim
   fi
   local version run=()
@@ -157,6 +151,7 @@ Run \`ultron guide\` and follow it before opening windows for the user, using su
 $_AGENT_END"
   mkdir -p "$(dirname -- "$file")"
   if [[ -e "$file" ]] && grep -qxF "$_AGENT_BEGIN" "$file"; then
+    grep -qxF "$_AGENT_END" "$file" || die "$file: the ultron block has no end line; fix it by hand"
     # Replace in place, so the block keeps its position.
     rest=$(BLOCK=$block awk -v b="$_AGENT_BEGIN" -v e="$_AGENT_END" '
       $0 == b {print ENVIRON["BLOCK"]; skip = 1; next}
@@ -199,6 +194,7 @@ _agent_remove() {
     ;;
   block)
     if [[ -f "$target" ]] && grep -qxF "$_AGENT_BEGIN" "$target"; then
+      grep -qxF "$_AGENT_END" "$target" || die "$target: the ultron block has no end line; fix it by hand"
       local rest
       rest=$(_agent_block_strip "$target")
       printf '%s\n' "$rest" >"$target"

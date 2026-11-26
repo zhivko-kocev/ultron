@@ -22,7 +22,7 @@ It writes a new folder `ultron-migration-<date>` there and:
 
 1. stops if the copy won't fit;
 2. exports every Docker volume;
-3. copies your home folder without caches and things that are rebuilt anyway (`~/.cache`, the Trash, tool installs, `node_modules`, Rust `target/` folders, ISO downloads);
+3. copies your home folder without caches and things that are rebuilt anyway (`~/.cache`, the Trash, tool installs, `node_modules`, Rust `target/` folders, ISO downloads, rootless Docker's images and containers in `~/.local/share/docker`: the volumes were exported in step 2);
 4. copies `/etc` and saves your package lists;
 5. checks the copy and marks it complete.
 
@@ -60,7 +60,7 @@ Look first:
 
     ultron migrate restore --from LABEL=backup --dry-run
 
-The summary shows what would be copied (full list: `/tmp/ultron-restore-preview.txt`). Then for real:
+The summary shows what would be copied (it prints the path of the full list, a new file under `/tmp`). Then for real:
 
     ultron migrate restore --from LABEL=backup
 

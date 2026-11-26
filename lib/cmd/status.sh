@@ -22,10 +22,7 @@ cmd_status() {
 
   local tick=0 first=1 boss="" local_ai="" ai="" ts="" ts_on=0 joc_up=1
   local prev_total=0 prev_idle=0 total idle cpu=0 user nice sys idl iow irq sirq steal _rest
-  local key val _unit mem_total mem_avail used10 out vol clock bat cap bstate f line b sleep_fd=""
-
-  # A read that times out on a pipe nobody writes to: sleep without starting a process.
-  exec {sleep_fd}<> <(:) || sleep_fd=""
+  local key val _unit mem_total mem_avail used10 out vol clock bat cap bstate f line b
 
   printf '{"version":1}\n[\n'
   while :; do
@@ -137,11 +134,7 @@ cmd_status() {
       printf ',[%s]\n' "$line"
     fi
 
-    if [[ -n "$sleep_fd" ]]; then
-      read -rt 2 -u "$sleep_fd" _ || true
-    else
-      sleep 2
-    fi
+    nap 2
     tick=$((tick + 1))
   done
 }

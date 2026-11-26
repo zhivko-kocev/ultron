@@ -73,20 +73,28 @@ _desktop_keyring() {
   fi
 }
 
+# _desktop_mime_viewer APP TYPE...: APP opens TYPE, unless mimeapps.list already names an app for it (your choice stays).
+_desktop_mime_viewer() {
+  local app=$1 t
+  shift
+  for t in "$@"; do
+    if ! awk -F= -v t="$t" '$1 == t { f = 1 } END { exit !f }' "$HOME/.config/mimeapps.list" 2>/dev/null; then
+      xdg-mime default "$app" "$t"
+    fi
+  done
+}
+
 _desktop_mime() {
   say "Setting default apps"
   local t
+  # Links always go to the link router (ultron open-url): it sends local pages to the preview browser.
   for t in x-scheme-handler/http x-scheme-handler/https text/html application/xhtml+xml; do
     xdg-mime default ultron-browser.desktop "$t"
   done
-  for t in image/png image/jpeg image/gif image/webp image/bmp image/tiff; do
-    xdg-mime default imv.desktop "$t"
-  done
-  for t in video/mp4 video/x-matroska video/webm video/quicktime video/mpeg audio/flac audio/ogg video/ogg; do
-    xdg-mime default mpv.desktop "$t"
-  done
-  xdg-mime default org.pwmt.zathura-pdf-mupdf.desktop application/pdf
-  xdg-mime default thunar.desktop inode/directory
+  _desktop_mime_viewer imv.desktop image/png image/jpeg image/gif image/webp image/bmp image/tiff
+  _desktop_mime_viewer mpv.desktop video/mp4 video/x-matroska video/webm video/quicktime video/mpeg audio/flac audio/ogg video/ogg
+  _desktop_mime_viewer org.pwmt.zathura-pdf-mupdf.desktop application/pdf
+  _desktop_mime_viewer thunar.desktop inode/directory
 }
 
 # _desktop_shell: a starter zsh config, only for people who have none (dotfiles run earlier).
@@ -103,6 +111,22 @@ _desktop_shell() {
     say "Making zsh your login shell"
     sudo chsh -s /usr/bin/zsh "$ULTRON_USER" || warn "chsh failed: run 'chsh -s /usr/bin/zsh' yourself"
   fi
+}
+
+# _desktop_first_boot_done: remove the first-boot autologin and install-on-login that bootstrap.sh armed.
+# The last root action of this step (the last root step of a default install): the install's root work is
+# done, so tty1 goes back to a normal login.
+_desktop_first_boot_done() {
+  local files=(/var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf
+    /etc/profile.d/ultron-firstboot.sh) f
+  for f in "${files[@]}"; do
+    if [[ -e "$f" ]]; then
+      say "Removing the first-boot autologin"
+      sudo rm -f "${files[@]}"
+      sudo systemctl daemon-reload
+      return 0
+    fi
+  done
 }
 
 step_desktop() {
@@ -129,4 +153,5 @@ step_desktop() {
   mkdir -p "$HOME/Pictures/Screenshots"
   _desktop_mime
   _desktop_shell
+  _desktop_first_boot_done # keep last: see its comment
 }

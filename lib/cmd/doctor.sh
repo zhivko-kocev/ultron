@@ -91,8 +91,13 @@ _check_boss() {
 
 _check_docker() {
   local opts
-  opts=$(DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock} docker info --format '{{.SecurityOptions}}' 2>/dev/null || true)
-  if [[ "$opts" == *rootless* ]]; then _pass "Docker is rootless"; else _fail "Docker is rootless (docker info: ${opts:-no answer})"; fi
+  # docker info would start the daemon (socket activation): only ask a running one.
+  if systemctl --user is-active -q docker.service; then
+    opts=$(DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock} docker info --format '{{.SecurityOptions}}' 2>/dev/null || true)
+    if [[ "$opts" == *rootless* ]]; then _pass "Docker is rootless"; else _fail "Docker is rootless (docker info: ${opts:-no answer})"; fi
+  else
+    _info "Docker isn't running (it starts on first use)"
+  fi
   if id -nG "$ULTRON_USER" | tr ' ' '\n' | grep -qx docker; then
     _fail "$ULTRON_USER is in the docker group (root-equivalent): sudo gpasswd -d $ULTRON_USER docker"
   else

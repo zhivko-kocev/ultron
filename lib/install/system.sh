@@ -48,8 +48,12 @@ _system_askpass() {
 }
 
 # _system_mounts: every MOUNTS entry in fstab (nofail, so a missing disk never stops the boot), mounted now.
+# Each line ultron writes has a "# ultron MOUNTS" line above it, so a changed or removed entry is taken out.
 _system_mounts() {
-  local spec mp dev fstype added=0
+  local spec mp dev fstype line old before mps=()
+  before=$(cat /etc/fstab)
+  old=$(sed -n '/^# ultron MOUNTS$/{n;p}' /etc/fstab)
+  sudo sed -i '/^# ultron MOUNTS$/,+1d' /etc/fstab
   while read -r -u 3 spec mp; do
     [[ -n "$spec" ]] || continue
     case $spec in
@@ -61,7 +65,14 @@ _system_mounts() {
       ;;
     esac
     if [[ -z "$dev" ]]; then
-      warn "MOUNTS: no disk matches $spec (not connected?): skipped $mp"
+      # A disk that isn't connected now keeps the line ultron wrote for it earlier.
+      line=$(awk -v s="$spec" -v m="$mp" '$1 == s && $2 == m { print; exit }' <<<"$old")
+      if [[ -n "$line" ]]; then
+        printf '# ultron MOUNTS\n%s\n' "$line" | sudo tee -a /etc/fstab >/dev/null
+        warn "MOUNTS: no disk matches $spec (not connected?): its fstab line stays, not mounted now"
+      else
+        warn "MOUNTS: no disk matches $spec (not connected?): skipped $mp"
+      fi
       continue
     fi
     fstype=$(sudo blkid -o value -s TYPE "$dev" 2>/dev/null || true)
@@ -70,22 +81,24 @@ _system_mounts() {
       continue
     }
     if awk -v s="$spec" -v m="$mp" '!/^[[:space:]]*#/ && ($1 == s || $2 == m) { f = 1 } END { exit !f }' /etc/fstab; then
-      echo "  $spec $mp: already in /etc/fstab"
+      echo "  $spec $mp: already in /etc/fstab (a line ultron didn't write)"
     else
-      say "Adding $spec ($fstype) at $mp to /etc/fstab (nofail)"
-      printf '%s %s %s defaults,noatime,nofail,x-systemd.device-timeout=5s 0 2\n' "$spec" "$mp" "$fstype" |
+      echo "  $spec ($fstype) at $mp (nofail)"
+      printf '# ultron MOUNTS\n%s %s %s defaults,noatime,nofail,x-systemd.device-timeout=5s 0 2\n' "$spec" "$mp" "$fstype" |
         sudo tee -a /etc/fstab >/dev/null
-      added=1
     fi
     sudo mkdir -p "$mp"
-    if ((added)); then
-      sudo systemctl daemon-reload
-      added=0
-    fi
+    mps+=("$mp")
+  done 3< <(conf_mounts)
+  if [[ "$(cat /etc/fstab)" != "$before" ]]; then
+    say "/etc/fstab changed: reloading systemd's mount units"
+    sudo systemctl daemon-reload
+  fi
+  for mp in "${mps[@]}"; do
     if ! mountpoint -q "$mp"; then
       sudo mount "$mp" || warn "Couldn't mount $mp now (see above); it's tried again at every boot"
     fi
-  done 3< <(conf_mounts)
+  done
 }
 
 _system_firewall() {
@@ -104,8 +117,16 @@ _system_firewall() {
   sudo ufw default deny incoming >/dev/null
   sudo ufw default allow outgoing >/dev/null
   sudo ufw allow in on tailscale0 >/dev/null
+  # ultron's rules carry the comment "ultron": the ones no longer in FIREWALL_ALLOW are deleted.
+  local t
+  while read -r t; do
+    if [[ -n "$t" ]] && ! _in_list "$t" "${rules[@]}"; then
+      echo "  closing $t (no longer in FIREWALL_ALLOW)"
+      sudo ufw delete allow "$t" >/dev/null
+    fi
+  done < <(sudo ufw show added | awk -v c="'ultron'" '$1 == "ufw" && $2 == "allow" && $4 == "comment" && $5 == c { print $3 }')
   for tok in "${rules[@]}"; do
-    sudo ufw allow "$tok" >/dev/null
+    sudo ufw allow "$tok" comment ultron >/dev/null
   done
   sudo ufw --force enable >/dev/null
   # --now: `ufw enable` loads the rules but leaves ufw.service inactive until the next boot.

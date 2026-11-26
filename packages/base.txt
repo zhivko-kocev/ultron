@@ -18,7 +18,6 @@ tree
 unzip
 zip
 curl
-wget
 rsync
 python
 pacman-contrib

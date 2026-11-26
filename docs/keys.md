@@ -41,7 +41,7 @@ Volume keys — Volume up / down, mute
 Media keys — Play/pause, next, previous
 Brightness keys — Screen brightness up / down
 Super+B — Boss: jump to the boss agent on workspace 1
-Super+Backspace — Back to where you were before the last jump
+Super+Backspace — Back to the workspace you were on before (same as Super+Ctrl+Tab)
 Super+A — Attention: go to the agent that needs you, else the latest urgent window
 Super+N — New thread (when the boss is Jocasta)
 Super+Shift+S — Region screenshot for the boss: saves it, copies its path, jumps to the boss

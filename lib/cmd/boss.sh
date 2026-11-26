@@ -22,11 +22,8 @@ cmd_boss() {
   fi
   if ((start)); then return 0; fi
 
-  ensure_rundir
-  local cur
-  cur=$(focused_ws)
-  if [[ "$cur" != "${WS[1]}" ]]; then printf '%s\n' "$cur" >"$R/back"; fi
-  swaymsg "workspace \"${WS[1]}\"; [con_id=$id] focus" >/dev/null
+  goto_ws "${WS[1]}"
+  swaymsg "[con_id=$id] focus" >/dev/null
   if [[ ${cmd[0]} == jocasta ]]; then
     if ((fresh)); then sleep 1; else sleep 0.1; fi
     # Alt+1: Jocasta's boss row.

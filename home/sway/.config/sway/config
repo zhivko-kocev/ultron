@@ -141,7 +141,7 @@ bindsym $mod+Mod1+s move scratchpad
 
 # System
 bindsym $mod+Ctrl+l exec ultron lock
-bindsym $mod+Ctrl+v exec ultron clip
+bindsym $mod+Ctrl+v exec cliphist list | fuzzel --dmenu --prompt "clip ▸ " | cliphist decode | wl-copy
 bindsym $mod+comma exec makoctl dismiss
 bindsym $mod+Shift+comma exec makoctl dismiss --all
 bindsym Print exec ultron shot region
@@ -161,7 +161,7 @@ bindsym --locked XF86MonBrightnessDown exec brightnessctl set 5%-
 
 # Agentic keys
 bindsym $mod+b exec ultron boss
-bindsym $mod+BackSpace exec ultron back
+bindsym $mod+BackSpace workspace back_and_forth
 bindsym $mod+a exec ultron attention
 bindsym $mod+n exec ultron task
 bindsym $mod+Shift+s exec ultron snap

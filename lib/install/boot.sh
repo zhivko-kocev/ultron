@@ -37,6 +37,16 @@ _boot_good() {
   sudo grep -qE "$LIMINE_KERNEL_RE" "$1" && sudo grep -qF -- "$2" "$1"
 }
 
+# _boot_restore: put the last working boot config back (archinstall's on the first run).
+_boot_restore() {
+  if sudo test -f /boot/limine.conf.last-good; then
+    sudo cp /boot/limine.conf.last-good /boot/limine.conf
+  else
+    sudo cp /boot/limine.conf.archinstall /boot/limine.conf
+    sudo install -D -m 0644 /boot/limine.conf.archinstall /boot/EFI/BOOT/limine.conf
+  fi
+}
+
 step_boot() {
   local sys=$ULTRON_ROOT/system tmp tmpl cmdline hook f
   # Limine reads a limine.conf next to its EFI binary before /boot/limine.conf (the ESP root), and
@@ -86,32 +96,48 @@ step_boot() {
     sudo cp /boot/limine.conf /boot/limine.conf.last-good
   fi
 
-  # 4. Branded head; limine-update appends the entries.
-  say "Writing /boot/limine.conf (ultron branding, theme colours)"
+  # 4. Branded head; limine-update appends the entries. A config that already starts with this head and
+  # boots is only refreshed, so the file is never without entries.
   tmp=$(mktemp)
   _boot_head "$tmp"
-  install_root "$tmp" /boot/limine.conf 0644
-  rm -f "$tmp"
+  local rewrite=0 n
+  n=$(wc -l <"$tmp")
+  if ! sudo test -f /boot/limine.conf || ! _boot_good /boot/limine.conf "$cmdline" ||
+    ! sudo head -n "$n" /boot/limine.conf | cmp -s - "$tmp"; then
+    rewrite=1
+  fi
   for f in "${alt[@]}"; do
-    sudo rm -f "$f"
+    if sudo test -e "$f"; then rewrite=1; fi
   done
+  if ((rewrite)); then
+    # Until the new config has its entries, an interruption (Ctrl+C, a closed window) puts the old one back.
+    trap '_boot_restore; sudo_drop' EXIT
+    trap 'exit 130' INT TERM
+    say "Writing /boot/limine.conf (ultron branding, theme colours)"
+    install_root "$tmp" /boot/limine.conf 0644
+    for f in "${alt[@]}"; do
+      sudo rm -f "$f"
+    done
+  fi
+  rm -f "$tmp"
 
   # 5. Install, rebuild the initramfs and generate entries.
   say "Installing Limine and generating boot entries"
-  sudo limine-install || warn "limine-install failed (no NVRAM entry); the fallback path \\EFI\\BOOT\\BOOTX64.EFI still boots"
-  sudo limine-install --fallback || warn "limine-install --fallback failed"
+  if ((rewrite)); then
+    sudo limine-install || warn "limine-install failed (no NVRAM entry); the fallback path \\EFI\\BOOT\\BOOTX64.EFI still boots"
+    sudo limine-install --fallback || warn "limine-install --fallback failed"
+  fi
   sudo limine-update || warn "limine-update failed"
 
   # 6. Never leave an unbootable config behind.
   if ! _boot_good /boot/limine.conf "$cmdline"; then
-    if sudo test -f /boot/limine.conf.last-good; then
-      sudo cp /boot/limine.conf.last-good /boot/limine.conf
-    else
-      sudo cp /boot/limine.conf.archinstall /boot/limine.conf
-      sudo install -D -m 0644 /boot/limine.conf.archinstall /boot/EFI/BOOT/limine.conf
-    fi
+    _boot_restore
+    trap sudo_drop EXIT
+    trap - INT TERM
     die "The new /boot/limine.conf had no kernel entry or lost the kernel command line, so the last working config was put back. Rerun: ultron install boot"
   fi
+  trap sudo_drop EXIT
+  trap - INT TERM
   ok "/boot/limine.conf has the kernel entry and command line"
 
   # 7. snapper config for / (creates the /.snapshots subvolume).

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # ultron-vm: test ultron in a QEMU/KVM virtual machine on the host (Phase B).
 #   ultron-vm create              download and check the Arch ISO, make the disk and UEFI vars
-#   ultron-vm run [--iso] [--nogl] start the VM (--iso boots the installer)
-#   ultron-vm serve               serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
+#   ultron-vm run [--iso] [--nogl] start the VM (--iso boots the installer; ULTRON_VM_ISO picks another ISO)
 #   ultron-vm type TEXT / key COMBO / shot FILE.png   drive a running VM (QMP)
 #   ultron-vm ssh [CMD...]        ssh into the VM (needs sshd and your key in the VM)
 #   ultron-vm destroy             delete the VM and its downloads
@@ -14,7 +13,6 @@ FALLBACK_ISO=archlinux-2026.11.01-x86_64.iso
 OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
 OVMF_VARS=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 DISK_SIZE=40G
-SERVE_PORT=8765
 SSH_PORT=2222
 QMP_SOCK=$STATE/qmp.sock
 
@@ -31,12 +29,15 @@ usage() {
 Usage: ultron-vm <command>
   create               download and check the Arch ISO, make the 40G disk and the UEFI vars
   run [--iso] [--nogl] start the VM; --iso boots the installer; --nogl turns off 3D
-  serve                serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
   type TEXT            type TEXT into the VM (\n is Enter)
   key COMBO            press one key combination, like ret, ctrl-alt-f2 or meta_l-ret
   shot FILE.png        save a screenshot of the VM's screen
   ssh [CMD...]         ssh to the VM as $ULTRON_VM_USER (default: your user name), port 2222
   destroy              delete the VM disk and downloads (asks first)
+
+Environment:
+  ULTRON_VM_ISO=/path/to.iso   run --iso boots this file instead of the downloaded Arch ISO
+                               (e.g. an ultron ISO from a release or iso/build)
 EOF
 }
 
@@ -121,7 +122,7 @@ cmd_create() {
 
 # shellcheck disable=SC2054 # qemu options are comma-separated by design
 cmd_run() {
-  local with_iso=0 gl=1 arg
+  local with_iso=0 gl=1 arg iso=""
   for arg in "$@"; do
     case $arg in
     --iso) with_iso=1 ;;
@@ -133,6 +134,10 @@ cmd_run() {
   [[ -e /dev/kvm ]] || die "/dev/kvm is missing: turn on SVM in the BIOS."
   [[ -f $OVMF_CODE ]] || die "UEFI firmware is missing ($OVMF_CODE). Install it with: sudo pacman -S --needed edk2-ovmf"
   [[ -d $STATE ]] || die "No VM yet. Run: ultron-vm create"
+  if ((with_iso)) && [[ -n ${ULTRON_VM_ISO:-} ]]; then
+    [[ -f $ULTRON_VM_ISO ]] || die "ULTRON_VM_ISO points at $ULTRON_VM_ISO, which doesn't exist."
+    iso=$(realpath "$ULTRON_VM_ISO") # before the cd below, so a relative path works
+  fi
   cd "$STATE"
   [[ -f disk.qcow2 && -f vars.fd ]] || die "The VM disk or UEFI vars are missing. Run: ultron-vm create"
 
@@ -155,23 +160,16 @@ cmd_run() {
     -audiodev pipewire,id=a0 -device ich9-intel-hda -device hda-duplex,audiodev=a0
   )
   if ((with_iso)); then
-    local iso
-    iso=$(iso_name)
-    [[ -f $iso ]] || die "The ISO $iso is missing. Run: ultron-vm create"
+    if [[ -z $iso ]]; then
+      iso=$(iso_name)
+      [[ -f $iso ]] || die "The ISO $iso is missing. Run: ultron-vm create"
+    fi
     # bootindex, not -boot once=d: OVMF follows its saved boot order and ignores -boot once.
     qemu+=(-drive "file=$iso,if=none,id=cd,media=cdrom,readonly=on" -device ide-cd,drive=cd,bootindex=0)
   fi
 
   say "Starting the VM (Ctrl+Alt+G grabs input so Super keys reach the VM; press it again to release)"
   exec "${qemu[@]}"
-}
-
-cmd_serve() {
-  local dist=$HOME/Projects/jocasta/dist
-  need python3 python
-  [[ -d $dist ]] || die "$dist is missing. Build Jocasta first: cd ~/Projects/jocasta && mise run build"
-  say "Serving $dist at http://127.0.0.1:$SERVE_PORT (the VM uses http://10.0.2.2:$SERVE_PORT). Ctrl+C stops it."
-  exec python3 -m http.server "$SERVE_PORT" --bind 127.0.0.1 --directory "$dist"
 }
 
 # qmp COMMAND_JSON...: send QMP commands to the running VM, one after the other.
@@ -276,7 +274,6 @@ main() {
   case $cmd in
   create) cmd_create "$@" ;;
   run) cmd_run "$@" ;;
-  serve) cmd_serve "$@" ;;
   type) cmd_type "$@" ;;
   key) cmd_key "$@" ;;
   shot) cmd_shot "$@" ;;

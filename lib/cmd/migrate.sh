@@ -7,13 +7,13 @@
 # shellcheck source=install.sh
 source "$ULTRON_ROOT/lib/cmd/install.sh"
 
-MIGRATE_PREVIEW=/tmp/ultron-restore-preview.txt
 MIGRATE_MNT=/mnt/ultron-migrate
 
-# Static backup excludes (rsync patterns anchored at the home folder).
+# Static backup excludes (rsync patterns anchored at the home folder). Rootless Docker's data folder is
+# skipped: images are pulled again and volumes are exported to docker-volumes/.
 MIGRATE_BACKUP_EXCLUDES=(
-  /.cache/ /.local/share/mise/ /.local/share/Trash/ /.local/share/ultron-vm/ /.stremio-server/
-  /.rustup/ /.cargo/registry/ /.cargo/git/ /.npm/_cacache/ /.bun/install/cache/
+  /.cache/ /.local/share/mise/ /.local/share/Trash/ /.local/share/ultron-vm/ /.local/share/docker/
+  /.stremio-server/ /.rustup/ /.cargo/registry/ /.cargo/git/ /.npm/_cacache/ /.bun/install/cache/
   "/Downloads/archlinux-*.iso"
 )
 
@@ -26,7 +26,7 @@ MIGRATE_RESTORE_EXCLUDES=(
   /.config/environment.d/ /.config/herdr/ /.local/state/herdr/ /.local/share/herdr/ /.config/mise/
   /.local/state/mise/ /.local/share/applications/ /.agents/ /.bashrc /.bash_profile /.bash_logout
   /.profile /.XCompose /.zshrc /.zshenv /.config/chrome-flags.conf /.config/chromium-flags.conf
-  /.config/zed/ /.config/git/ /Projects/ultron/ /Projects/dotfiles/
+  /.config/zed/ /.config/git/ /Projects/ultron/ /Projects/dotfiles/ /.local/share/docker/
 )
 
 _MIG_MOUNTED=""
@@ -330,12 +330,14 @@ _migrate_restore() {
   # readable here, and nothing root-owned can land in ~. -o/-g are ignored for a non-root rsync, so restored
   # files belong to you. Unreadable files are reported (exit 23).
   if ((dry)); then
-    rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$dir/home/" "$HOME/" >"$MIGRATE_PREVIEW" ||
+    local preview
+    preview=$(mktemp -t ultron-restore-preview.XXXXXX)
+    rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$dir/home/" "$HOME/" >"$preview" ||
       warn "rsync reported problems (see above)"
     local count
-    count=$(grep -c . "$MIGRATE_PREVIEW" || true)
-    say "Dry run: $count changes (full list: $MIGRATE_PREVIEW). By top-level folder:"
-    cut -d' ' -f2- "$MIGRATE_PREVIEW" | awk -F/ 'NF { print $1 }' | sort | uniq -c | sort -rn | head -n 25 || true
+    count=$(grep -c . "$preview" || true)
+    say "Dry run: $count changes (full list: $preview). By top-level folder:"
+    cut -d' ' -f2- "$preview" | awk -F/ 'NF { print $1 }' | sort | uniq -c | sort -rn | head -n 25 || true
     local tgz
     for tgz in "$dir"/docker-volumes/*.tgz; do
       if [[ -e "$tgz" ]]; then echo "  docker volume: $(basename "$tgz" .tgz)"; fi

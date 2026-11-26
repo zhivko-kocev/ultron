@@ -9,6 +9,8 @@
 *.iso
 *.qcow2
 *.fd
+# iso/build output
+/out/
 
 # Secrets and local overrides
 .env

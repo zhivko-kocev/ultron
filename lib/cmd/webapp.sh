@@ -21,15 +21,6 @@ _webapp_reload() {
   if in_sway; then swaymsg reload >/dev/null; fi
 }
 
-# _webapp_host URL: the host part, without user info or port.
-_webapp_host() {
-  local h=${1#*://}
-  h=${h%%[/?#]*}
-  h=${h##*@}
-  h=${h%:*}
-  printf '%s\n' "$h"
-}
-
 _webapp_add() {
   local name=${1:-} url=${2:-} ws="" slug file rule host had_rule=0
   [[ -n "$name" && -n "$url" ]] || die "usage: ultron webapp add NAME URL [--ws N]"
@@ -51,7 +42,7 @@ _webapp_add() {
   slug=$(_webapp_slug "$name")
   file=$(_webapp_desktop "$slug")
   rule=$(_webapp_rule "$slug")
-  host=$(_webapp_host "$url")
+  host=$(_url_host "$url")
 
   mkdir -p "$_WEBAPP_APPS"
   cat >"$file" <<EOF

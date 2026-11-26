@@ -1,31 +1,9 @@
 # shellcheck shell=bash
-# ultron update [--no-pull]: pull ultron, reinstall, upgrade packages and tools, rebuild Jocasta, check.
+# ultron update [--no-pull]: pull ultron, upgrade packages, reinstall, rebuild Jocasta, upgrade AUR packages and
+# tools, check. The sudo ticket is dropped before any AUR package is built.
 
 # shellcheck source=install.sh
 source "$ULTRON_ROOT/lib/cmd/install.sh"
-# shellcheck source=../install/aur.sh
-source "$ULTRON_ROOT/lib/install/aur.sh"
-
-# _update_packages: yay -Syu, with the quirk packages held back and rebuilt with their fixes.
-_update_packages() {
-  local p held=() ignore=() pending=()
-  for p in "${AUR_QUIRK_PKGS[@]}"; do
-    if pacman -Q "$p" >/dev/null 2>&1; then held+=("$p"); fi
-  done
-  if ((${#held[@]})); then ignore=(--ignore "$(
-    IFS=,
-    printf '%s' "${held[*]}"
-  )"); fi
-  say "Upgrading packages (yay -Syu)"
-  yay -Syu "${ignore[@]}" || die "yay -Syu failed (see above)."
-  ((${#held[@]})) || return 0
-  mapfile -t pending < <({ yay -Qua 2>/dev/null || true; } | awk '{ print $1 }')
-  for p in "${held[@]}"; do
-    _in_list "$p" "${pending[@]}" || continue
-    say "Rebuilding $p (it needs a build fix)"
-    aur_install_quirk "$p" || warn "Rebuilding $p failed (see above); the installed version stays"
-  done
-}
 
 _update_jocasta() {
   [[ -d "$JOCASTA_DIR/.git" ]] || return 0
@@ -77,21 +55,27 @@ cmd_update() {
     fi
   fi
 
-  # 2. Root steps: the default steps except preflight, agents and verify.
+  # 2. Repository upgrade (snap-pac takes snapshots before and after), then the root steps: the default
+  # steps except preflight, aur (it builds third-party code) and agents.
   confirm_checkout
+  pkg_lock
   sudo_keepalive
+  say "Upgrading packages from the Arch repositories (pacman -Syu)"
+  sudo pacman -Syu --noconfirm || die "pacman -Syu failed (see above)."
   local steps=() s
   for s in "${ULTRON_DEFAULT_STEPS[@]}"; do
-    _in_list "$s" preflight agents verify || steps+=("$s")
+    _in_list "$s" preflight aur agents || steps+=("$s")
   done
   run_steps "${steps[@]}"
 
-  # 3. System and AUR upgrade (snap-pac takes snapshots before and after).
-  _update_packages
-
-  # 4. Jocasta from main (its step drops the sudo ticket itself).
+  # 3. Jocasta from main (its step drops the sudo ticket itself).
   _update_jocasta
   sudo_drop
+
+  # 4. AUR packages, without the ticket: yay asks for the password itself when a package was built.
+  run_steps aur
+  say "Upgrading AUR packages (yay -Sua)"
+  yay -Sua --noconfirm || warn "yay -Sua failed (see above): the AUR packages it names stay at their old versions"
 
   # 5. Agent tools and the rest of mise, without sudo.
   run_steps agents

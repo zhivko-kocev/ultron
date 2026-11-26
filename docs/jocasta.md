@@ -8,7 +8,7 @@
 
 1. Clones `https://github.com/zhivko-kocev/jocasta` to `~/Projects/jocasta` if missing. If it is on `main` and clean, runs `git pull --ff-only`.
 2. Gets a build:
-   - **In the VM:** set `ULTRON_JOCASTA_FROM` to a URL or folder that holds `jocasta-linux-x64.tar.gz` and its `.sha256` (on the host, `vm/ultron-vm serve` serves `~/Projects/jocasta/dist` at `http://10.0.2.2:8765`).
+   - **In the VM:** set `ULTRON_JOCASTA_FROM` to a URL or folder that holds `jocasta-linux-x64.tar.gz` and its `.sha256`.
    - **Otherwise it builds:** `mise trust mise.toml`, `mise install --locked` for the tools in Jocasta's `mise.toml`, `mise exec -- bun install --frozen-lockfile`, then `mise run build` into `~/Projects/jocasta/dist`.
 3. Installs with Jocasta's own script into `~/.local/lib/jocasta`:
 

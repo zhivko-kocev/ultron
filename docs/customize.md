@@ -37,7 +37,7 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 | `LOCK_AFTER` | `600` | Seconds before the screen locks; `0` = never |
 | `SCREEN_OFF_AFTER` | `900` | Seconds before the screen turns off; `0` = never |
 
-`MOUNTS`, `FIREWALL_ALLOW`, `LOCAL_AI` and `OLLAMA_GPU` change the system: run `ultron install` after changing them.
+`MOUNTS`, `FIREWALL_ALLOW`, `LOCAL_AI` and `OLLAMA_GPU` change the system: run `ultron install` after changing them. An entry you remove from `MOUNTS` or `FIREWALL_ALLOW` is taken out of `/etc/fstab` or the firewall again; lines and rules you added by hand are left alone.
 
 ## Themes
 

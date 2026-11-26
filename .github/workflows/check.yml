@@ -1,0 +1,19 @@
+name: check
+
+# shellcheck over every script, then the plain-bash self-checks in tests/.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: shellcheck
+        run: shellcheck -x bin/ultron lib/*.sh lib/*/*.sh bootstrap.sh vm/ultron-vm system/usr/lib/ultron/* home/bin/.local/bin/ask home/agentbin/.local/lib/ultron/agent-bin/sudo iso/build tests/run tests/*.sh
+      - name: self-checks
+        run: bash tests/run

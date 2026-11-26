@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # ultron bootstrap: runs as root in the Arch live ISO (UEFI) and installs the base system with archinstall.
+# The ultron ISO (iso/build) starts it on the first console; on a stock Arch ISO paste:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/zhivko-kocev/ultron/main/bootstrap.sh)
 # Standalone on purpose: the ISO has no checkout, so lib/common.sh is not available here.
+# Offline with a Wi-Fi card, it offers a network list first; the joined network is carried over to the new
+# system, whose first boot logs in on tty1 and continues with `ultron install --first-boot`.
 #
 # Every answer can come from the environment (a set variable skips its question):
 #   ULTRON_USER       your login name (asked when unset)
@@ -44,13 +47,104 @@ trap 'exit 130' INT TERM HUP
 
 # ---- 1. checks ----------------------------------------------------------------
 
+online() { curl -fsI --max-time 10 https://archlinux.org >/dev/null 2>&1; }
+
+# wifi_dev: the first wireless network device (fails when there is none).
+wifi_dev() {
+  local d
+  for d in /sys/class/net/*/wireless; do
+    [[ -e "$d" ]] || continue
+    d=${d%/wireless}
+    printf '%s\n' "${d##*/}"
+    return 0
+  done
+  return 1
+}
+
+# iwctl colours its tables even when piped.
+plain() { sed -E 's/\x1b\[[0-9;]*m//g'; }
+
+# connected_ssid DEV: the network DEV is joined to (empty when none).
+connected_ssid() {
+  { iwctl station "$1" show 2>/dev/null || true; } | plain |
+    sed -n -E '/^[[:space:]]*Connected network[[:space:]]/{s/^[[:space:]]*Connected network[[:space:]]+(.*[^[:space:]])[[:space:]]*$/\1/p;q}'
+}
+
+# join_wifi DEV: pick a network from a list, type its password, wait until the internet answers.
+# Loops until it's online; a failure says why and shows the list again.
+join_wifi() {
+  local dev=$1 line ssid pw out i
+  local re='^[[:space:]>]*(.*[^[:space:]])[[:space:]]+(open|psk|8021x|wep)[[:space:]]+[*]*[[:space:]]*$'
+  local -a names kinds
+  rfkill unblock wifi 2>/dev/null || true
+  while true; do
+    say "Looking for Wi-Fi networks"
+    iwctl station "$dev" scan >/dev/null 2>&1 || true
+    sleep 3
+    names=() kinds=()
+    while IFS= read -r line; do
+      if [[ "$line" =~ $re ]]; then
+        names+=("${BASH_REMATCH[1]}")
+        kinds+=("${BASH_REMATCH[2]}")
+      fi
+    done < <({ iwctl station "$dev" get-networks 2>/dev/null || true; } | plain)
+    echo "Pick your Wi-Fi network (or plug in a network cable and pick 'Scan again'):"
+    PS3="Number: "
+    ssid=""
+    select ssid in "${names[@]}" "Scan again"; do
+      [[ -n "$ssid" ]] && break
+      echo "Type one of the numbers above."
+    done
+    [[ -n "$ssid" ]] || die "No network picked. Run this again when you're ready."
+    if online; then return 0; fi
+    [[ "$ssid" != "Scan again" ]] || continue
+    for i in "${!names[@]}"; do
+      if [[ "${names[i]}" == "$ssid" ]]; then break; fi
+    done
+    case ${kinds[i]} in
+    8021x)
+      warn "$ssid is an enterprise (802.1X) network: this installer can't join it. Pick another one or plug in a cable."
+      continue
+      ;;
+    open) pw="" ;;
+    *)
+      read -r -s -p "Password for $ssid: " pw
+      echo
+      ;;
+    esac
+    say "Joining $ssid"
+    if [[ -n "$pw" ]]; then
+      out=$(iwctl --passphrase "$pw" station "$dev" connect "$ssid" 2>&1) || true
+    else
+      out=$(iwctl station "$dev" connect "$ssid" 2>&1) || true
+    fi
+    pw=""
+    if [[ "$(connected_ssid "$dev")" != "$ssid" ]]; then
+      warn "Couldn't join $ssid${out:+: $(printf '%s' "$out" | plain | tr -s '\n' ' ')} (a wrong password is the usual cause)."
+      continue
+    fi
+    for i in {1..10}; do
+      if online; then
+        say "Online through $ssid"
+        return 0
+      fi
+      sleep 2
+    done
+    warn "Joined $ssid, but the internet didn't answer within 20 s (a network with a sign-in page doesn't work here)."
+  done
+}
+
 checks() {
   say "Checking the live environment"
   [[ $EUID -eq 0 ]] || die "Run this as root (the Arch live ISO logs you in as root)."
   [[ -d /sys/firmware/efi/efivars ]] ||
     die "The USB stick started in legacy (BIOS) mode: reboot, open the boot menu and pick the entry that starts with UEFI:"
-  curl -fsI https://archlinux.org >/dev/null 2>&1 ||
-    die "No internet. Plug in a network cable, or join Wi-Fi with: iwctl station wlan0 connect <network>. Then run this again."
+  if ! online; then
+    local dev
+    dev=$(wifi_dev) ||
+      die "No internet. Plug in a network cable (or fix the connection), then run this again."
+    join_wifi "$dev"
+  fi
   local ver
   ver=$(archinstall --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)*' | head -n1 || true)
   [[ "$ver" == 4.* ]] ||
@@ -400,17 +494,101 @@ EOF
 
 # ---- 7. after the install -----------------------------------------------------------
 
+# keyfile VALUE: VALUE escaped for a NetworkManager keyfile (backslashes, a leading space).
+keyfile() {
+  local v=${1//\\/\\\\}
+  if [[ "$v" == ' '* ]]; then v="\\s${v:1}"; fi
+  printf '%s' "$v"
+}
+
+# carry_wifi: give the new system the Wi-Fi network this live system is joined to, so the first boot
+# is online without questions. iwd keeps what was typed in /var/lib/iwd/<name>.psk|.open|.8021x.
+carry_wifi() {
+  local dev ssid base psk="" uuid file
+  dev=$(wifi_dev) || return 0
+  ssid=$(connected_ssid "$dev")
+  [[ -n "$ssid" ]] || return 0
+  # iwd's file name: the SSID itself when it's only letters, digits, space, _ and -; else = and its hex.
+  local plain_name='^[A-Za-z0-9_ -]+$'
+  if [[ "$ssid" =~ $plain_name ]]; then
+    base=/var/lib/iwd/$ssid
+  else
+    base=/var/lib/iwd/=$(printf '%s' "$ssid" | od -An -tx1 | tr -d ' \n')
+  fi
+  if [[ -f "$base.8021x" ]]; then
+    warn "$ssid is an enterprise (802.1X) network: it isn't carried over. After reboot join it with: nmtui"
+    return 0
+  fi
+  if [[ -f "$base.psk" ]]; then
+    # iwd's settings files escape values the way NetworkManager's keyfiles do: copied as they are.
+    psk=$(sed -n '/^Passphrase=/{s///p;q}' "$base.psk")
+    [[ -n "$psk" ]] || psk=$(sed -n '/^PreSharedKey=/{s///p;q}' "$base.psk")
+    if [[ -z "$psk" ]]; then
+      warn "iwd kept no password for $ssid: after reboot join it with: nmtui"
+      return 0
+    fi
+  elif [[ ! -f "$base.open" ]]; then
+    warn "iwd kept no settings for $ssid: after reboot join it with: nmtui"
+    return 0
+  fi
+  say "Carrying the Wi-Fi network $ssid over to the new system"
+  uuid=$(cat /proc/sys/kernel/random/uuid)
+  file="/mnt/etc/NetworkManager/system-connections/${ssid//\//_}.nmconnection"
+  install -d -m 700 /mnt/etc/NetworkManager/system-connections
+  install -m 600 -o root -g root /dev/null "$file" # 0600 before the password is in it
+  {
+    printf '[connection]\nid=%s\nuuid=%s\ntype=wifi\n\n[wifi]\nmode=infrastructure\nssid=%s\n\n' \
+      "$(keyfile "$ssid")" "$uuid" "$(keyfile "$ssid")"
+    if [[ -n "$psk" ]]; then printf '[wifi-security]\nkey-mgmt=wpa-psk\npsk=%s\n\n' "$psk"; fi
+    printf '[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n'
+  } >"$file"
+  psk=""
+}
+
+# arm_first_boot: the first boot logs the user in on tty1 and runs `ultron install --first-boot`.
+# The install's desktop step removes all three files once its root work is done.
+arm_first_boot() {
+  say "Arming the first boot: after the disk password the install continues by itself"
+  install -d /mnt/var/lib/ultron /mnt/etc/systemd/system/getty@tty1.service.d
+  : >/mnt/var/lib/ultron/firstboot
+  cat >/mnt/etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf <<EOF
+# Written by ultron's bootstrap.sh: logs $USER_NAME in on tty1 until \`ultron install --first-boot\` is done.
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin $USER_NAME %I \$TERM
+EOF
+  cat >/mnt/etc/profile.d/ultron-firstboot.sh <<'EOF'
+# Written by ultron's bootstrap.sh: on the first boot, continue the install right after the login on tty1.
+# Removed by `ultron install` once its root work is done; until then every login on tty1 tries again.
+if [ -e /var/lib/ultron/firstboot ] && [ "$(tty)" = /dev/tty1 ] && [ "$(id -u)" -ne 0 ] &&
+  [ -x "$HOME/Projects/ultron/bin/ultron" ]; then
+  "$HOME/Projects/ultron/bin/ultron" install --first-boot
+fi
+EOF
+}
+
 finish() {
   cleanup
-  local home=/home/$USER_NAME clone="git clone --branch $REPO_REF $REPO_URL ~/Projects/ultron"
+  local home=/home/$USER_NAME clone="git clone --branch $REPO_REF $REPO_URL ~/Projects/ultron" cloned=0
   if ! mountpoint -q /mnt; then
     warn "nothing is mounted at /mnt; after reboot run: $clone"
   else
     say "Cloning ultron ($REPO_REF) into the new system"
     # runuser keeps root's HOME (mode 0700), whose git config the user can't read: give git the user's HOME.
-    arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="$home" \
-      git clone --branch "$REPO_REF" "$REPO_URL" "$home/Projects/ultron" ||
+    if arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="$home" \
+      git clone --branch "$REPO_REF" "$REPO_URL" "$home/Projects/ultron"; then
+      cloned=1
+      # A tag (the ISO's ULTRON_REF) leaves a detached HEAD, which `ultron update` can't pull: put the same
+      # commit on a local branch that follows the repo's default branch.
+      # shellcheck disable=SC2016 # expanded by the inner sh
+      arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="$home" sh -c 'cd "$1" || exit 1
+        git symbolic-ref -q HEAD >/dev/null && exit 0
+        up=$(git symbolic-ref -q --short refs/remotes/origin/HEAD) &&
+          git switch -q -c "${up#origin/}" && git branch -q -u "$up"' sh "$home/Projects/ultron" ||
+        warn "couldn't put the ultron checkout on a branch: ultron update won't pull until you run: git -C ~/Projects/ultron switch main"
+    else
       warn "the clone failed; after reboot run: $clone"
+    fi
 
     say "Writing ~/.config/ultron/ultron.conf"
     mkdir -p "/mnt$home/.config/ultron"
@@ -421,7 +599,13 @@ finish() {
     } >"/mnt$home/.config/ultron/ultron.conf"
     arch-chroot /mnt chown -R "$USER_NAME:" "$home/.config" || warn "couldn't give $home/.config to $USER_NAME"
 
-    printf 'Next: run ~/Projects/ultron/bin/ultron install\n' >/mnt/etc/motd
+    carry_wifi
+    if ((cloned)); then
+      arm_first_boot
+      printf 'If the install did not continue by itself, run: ~/Projects/ultron/bin/ultron install --first-boot\n' >/mnt/etc/motd
+    else
+      printf 'Next: run %s && ~/Projects/ultron/bin/ultron install --first-boot\n' "$clone" >/mnt/etc/motd
+    fi
     printf 'KEYMAP=%s\nFONT=default8x16\n' "$CONSOLE_KEYMAP" >/mnt/etc/vconsole.conf
     if [[ "$CONSOLE_KEYMAP" != us ]]; then
       # The initramfs asks for the disk password; it copies the keymap from vconsole.conf when it's built.
@@ -431,7 +615,7 @@ finish() {
     fi
   fi
   echo
-  say "Done. Remove the USB stick, reboot, type the disk password, log in as $USER_NAME, run the command shown."
+  say "Done. Remove the USB stick and reboot (type: reboot). Type the disk password: the install continues by itself, asks for your password once, and reboots into the desktop."
 }
 
 main() {

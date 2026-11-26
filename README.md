@@ -10,19 +10,20 @@ A lightweight Arch Linux desktop built for working with coding agents. Install i
 
 ## Install
 
-You need a PC or laptop (x86-64, UEFI) whose disk can be **erased**, a USB stick with the [Arch Linux ISO](https://archlinux.org/download/), and a network connection. Intel and AMD graphics work out of the box; NVIDIA runs on the open driver and is untested.
+You need a PC or laptop (x86-64, UEFI) whose disk can be **erased**, a USB stick, and a network connection (cable or Wi-Fi). Intel and AMD graphics work out of the box; NVIDIA runs on the open driver and is untested.
 
-1. Check the firmware settings ([docs/bios.md](docs/bios.md)) and boot the stick in **UEFI** mode. On Wi-Fi, connect first with `iwctl`.
-2. Run:
+1. Download `ultron-<version>-x86_64.iso` (and its `.sha256`) from the [latest release](https://github.com/zhivko-kocev/ultron/releases/latest) and write it to the stick with any image writer (balenaEtcher, Rufus in DD mode, or `dd`).
+2. Check the firmware settings ([docs/bios.md](docs/bios.md)) and boot the stick in **UEFI** mode. The installer starts by itself. Without a cable it lists the Wi-Fi networks: pick yours and type its password.
+3. It asks for a user name, host name, time zone, keyboard layout, an optional dotfiles repo, which disk to erase (you type `wipe`), and the passwords. Then it installs Arch.
+4. Remove the stick, reboot, and type the disk password. The install continues by itself (it asks for your password once), then reboots into the desktop, which shows a short welcome.
 
-       bash <(curl -fsSL https://raw.githubusercontent.com/zhivko-kocev/ultron/main/bootstrap.sh)
+If the install stops on the first boot, it says which step failed; fix that and run `ultron install --first-boot`.
 
-   It asks for a user name, host name, keyboard layout, an optional dotfiles repo, which disk to erase (you type `wipe`), and the passwords. Then it installs Arch.
-3. Reboot, type the disk password, log in, and run:
+**From a stock Arch ISO** ([archlinux.org/download](https://archlinux.org/download/)), boot it in UEFI mode, join Wi-Fi with `iwctl` if you need to, and run:
 
-       ~/Projects/ultron/bin/ultron install
+    bash <(curl -fsSL https://raw.githubusercontent.com/zhivko-kocev/ultron/main/bootstrap.sh)
 
-4. Reboot. The desktop starts by itself and shows a short welcome.
+The rest is the same as steps 3 and 4.
 
 Coming from another Linux install on the same disk? [docs/migrate.md](docs/migrate.md) carries your home folder across.
 
@@ -34,7 +35,7 @@ Coming from another Linux install on the same disk? [docs/migrate.md](docs/migra
 | Super+K | every key, searchable |
 | Super+Space / Super+Return | apps / terminal |
 | Super+B | the boss agent |
-| Super+A | go to whatever needs you; Super+Backspace goes back |
+| Super+A | go to whatever needs you; Super+Backspace goes back to your last workspace |
 | Super+M | focus mode: agents can't move you |
 | Super+Shift+S | screenshot a region and hand it to the boss |
 
@@ -81,7 +82,7 @@ Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greet
 
 | Folder | |
 |---|---|
-| `bootstrap.sh`, `install/` | the live-ISO installer |
+| `bootstrap.sh`, `install/`, `iso/` | the live-ISO installer and the ISO it ships on |
 | `bin/ultron`, `lib/` | the `ultron` command and the install steps (bash) |
 | `packages/` | package lists |
 | `system/` | root-owned files, copied into `/` |
@@ -97,6 +98,8 @@ Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greet
     vm/ultron-vm run           # boot the installed system (--nogl if graphics misbehave)
     vm/ultron-vm type 'ls\n'   # type into the VM; `key ctrl-alt-f2`; `shot f.png` (needs --nogl)
     vm/ultron-vm ssh [cmd]     # port 2222 (needs sshd and your key in the VM)
+
+To test an ultron ISO in the VM, put `ULTRON_VM_ISO=/path/to/ultron-<version>-x86_64.iso` in front of `vm/ultron-vm run --iso`. A pushed `v*` tag builds that ISO and publishes it as a release (`.github/workflows/release.yml`); to build one yourself: `docker run --rm --privileged -v "$PWD":/src -w /src archlinux:latest bash iso/build <tag>` (it lands in `out/`).
 
 Bootstrap from a fork or branch with `ULTRON_REPO=https://github.com/you/ultron ULTRON_REF=mybranch` in front of the bootstrap line. Every question has an `ULTRON_*` variable for unattended runs; they are listed at the top of `bootstrap.sh`.
 

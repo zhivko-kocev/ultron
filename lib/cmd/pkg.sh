@@ -109,6 +109,8 @@ cmd_pkg() {
   local quiet=()
   if [[ ! -t 0 ]]; then quiet=(--noconfirm --answerdiff None --answerclean None); fi
 
+  pkg_lock
+
   if [[ $sub == install ]]; then
     say "Installing: ${names[*]}"
     if yay -S --needed "${quiet[@]}" "${names[@]}"; then

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# iso/build TAG: build out/ultron-TAG-x86_64.iso and its .sha256: the Arch live ISO (archiso's releng
+# profile) that starts bootstrap.sh, pinned to TAG, on the first console.
+# Runs as root inside an archlinux container (mkarchiso mounts, so the container must be privileged):
+#   docker run --rm --privileged -v "$PWD":/src -w /src archlinux:latest bash iso/build v0.3.0
+set -euo pipefail
+
+die() {
+  printf 'iso/build: %s\n' "$*" >&2
+  exit 1
+}
+
+tag=${1:-}
+[[ "$tag" =~ ^[A-Za-z0-9._-]+$ ]] || die "usage: iso/build TAG (e.g. v0.3.0)"
+((EUID == 0)) || die "run this as root inside an archlinux container (see the top of this file)"
+src=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+out=$PWD/out
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+profile=$tmp/profile
+
+pacman -Syu --noconfirm --needed archiso
+cp -r /usr/share/archiso/configs/releng "$profile"
+
+# The installer, with this tag as the ultron version it clones.
+bootstrap=$profile/airootfs/root/bootstrap.sh
+install -m 755 "$src/bootstrap.sh" "$bootstrap"
+sed -i "s|^REPO_REF=\${ULTRON_REF:-main}\$|REPO_REF=\${ULTRON_REF:-$tag}|" "$bootstrap"
+grep -qxF "REPO_REF=\${ULTRON_REF:-$tag}" "$bootstrap" || die "couldn't set the tag in bootstrap.sh (its REPO_REF line changed)"
+
+# Start it on the first console only, so the other consoles (Alt+F2) stay plain live shells.
+cat >>"$profile/airootfs/root/.zlogin" <<'EOF'
+
+# ultron: start the installer on the first console.
+if [[ "$(tty)" == /dev/tty1 ]]; then
+    bash /root/bootstrap.sh
+fi
+EOF
+
+# bootstrap.sh needs jq; on the ISO it's there from the start.
+grep -qx jq "$profile/packages.x86_64" || echo jq >>"$profile/packages.x86_64"
+
+sed -i -e 's|^iso_name=.*|iso_name="ultron"|' -e "s|^iso_version=.*|iso_version=\"$tag\"|" "$profile/profiledef.sh"
+printf '%s\n' 'file_permissions+=(["/root/bootstrap.sh"]="0:0:755")' >>"$profile/profiledef.sh"
+
+mkdir -p "$out"
+mkarchiso -v -w "$tmp/work" -o "$out" "$profile"
+
+iso=ultron-$tag-x86_64.iso
+[[ -f "$out/$iso" ]] || die "mkarchiso finished but $out/$iso is missing"
+(cd "$out" && sha256sum "$iso" >"$iso.sha256")
+printf 'Built %s and %s.sha256\n' "$out/$iso" "$out/$iso"

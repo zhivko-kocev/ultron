@@ -4,18 +4,12 @@
 
 _DEV_TOOLS=(node bun deno python go rust java ruby php elixir zig dotnet)
 
-# _dev_installed: "TOOL<TAB>VERSION" for every global mise tool. mise's output has changed
-# between releases, so JSON is tried first and the text table is the fallback.
+# _dev_installed: "TOOL<TAB>VERSION" for every global mise tool.
 _dev_installed() {
-  local json
-  if json=$(mise ls --global --json 2>/dev/null) && jq -e 'type == "object"' >/dev/null 2>&1 <<<"$json"; then
-    jq -r 'to_entries[] | .key as $k
-      | (.value | if type == "array" then . else [.] end)[]
-      | select(type == "object" and .installed != false)
-      | "\($k)\t\(.version // "?")"' <<<"$json" 2>/dev/null || true
-  else
-    mise ls --global 2>/dev/null | awk 'NF >= 2 && tolower($1) != "tool" { print $1 "\t" $2 }' || true
-  fi
+  mise ls --global --json 2>/dev/null | jq -r 'to_entries[] | .key as $k
+    | (.value | if type == "array" then . else [.] end)[]
+    | select(type == "object" and .installed != false)
+    | "\($k)\t\(.version // "?")"' 2>/dev/null || true
 }
 
 # _dev_version TOOL: the installed version, or empty.
@@ -52,14 +46,11 @@ _dev_list() {
 }
 
 _dev_add() {
-  local tool=$1 tok v
+  local tool=$1 v
   _dev_check_name "$tool"
-  # Many tools download from GitHub, which rate-limits anonymous requests.
-  if [[ -z "${MISE_GITHUB_TOKEN:-}" ]] && have gh && tok=$(gh auth token 2>/dev/null) && [[ -n "$tok" ]]; then
-    export MISE_GITHUB_TOKEN=$tok
-  fi
   say "Installing the latest $tool for your user (this can take a few minutes)…"
-  mise use -g "$tool@latest" ||
+  # mise_gh: many tools download from GitHub, which rate-limits anonymous requests.
+  mise_gh use -g "$tool@latest" ||
     die "mise could not install '$tool'. Check the name with 'mise registry | grep -i $tool'; if GitHub limited the download, sign in with 'gh auth login' and try again"
   v=$(_dev_version "$tool")
   ok "$tool ${v:-(latest)} installed. New terminals pick it up; in this one, run: exec \$SHELL"

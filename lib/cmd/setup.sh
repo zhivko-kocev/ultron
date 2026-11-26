@@ -115,7 +115,7 @@ _setup_timezone() {
   local tz
   have timedatectl || die "timedatectl is missing"
   tz=$(timedatectl list-timezones | pick "Time zone (now: $(timedatectl show -p Timezone --value 2>/dev/null || echo '?'))") || _setup_cancel
-  term_run --title "Time zone" -- sudo timedatectl set-timezone "$tz"
+  term_run --hold --title "Time zone" -- sudo timedatectl set-timezone "$tz"
 }
 
 _setup_model() {

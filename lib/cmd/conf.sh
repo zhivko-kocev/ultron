@@ -1,14 +1,6 @@
 # shellcheck shell=bash
 # ultron conf [list | get KEY | set KEY VALUE | edit | path]: this machine's settings.
 
-_conf_known() {
-  local k
-  for k in "${_CONF_KEYS[@]}"; do
-    [[ "$k" == "$1" ]] && return 0
-  done
-  return 1
-}
-
 _conf_list() {
   local k v d
   conf_load
@@ -30,12 +22,12 @@ cmd_conf() {
   path) printf '%s\n' "$ULTRON_CONF" ;;
   get)
     [[ -n "${2:-}" ]] || die "usage: ultron conf get KEY"
-    _conf_known "$2" || die "unknown setting '$2'. Settings: ${_CONF_KEYS[*]}"
+    _in_list "$2" "${_CONF_KEYS[@]}" || die "unknown setting '$2'. Settings: ${_CONF_KEYS[*]}"
     conf_get "$2"
     ;;
   set)
     (($# == 3)) || die "usage: ultron conf set KEY VALUE   (\"\" as VALUE goes back to the default)"
-    _conf_known "$2" || die "unknown setting '$2'. Settings: ${_CONF_KEYS[*]}"
+    _in_list "$2" "${_CONF_KEYS[@]}" || die "unknown setting '$2'. Settings: ${_CONF_KEYS[*]}"
     conf_set "$2" "$3"
     ok "$2=$(conf_get "$2")"
     # shellcheck source=apply.sh

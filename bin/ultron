@@ -31,8 +31,9 @@ Everyday
   pkg install|remove [NAME...]   packages (official and AUR)
   dev list|add|remove [TOOL]     languages and runtimes (mise)
   webapp add|remove|list         web apps as launcher entries
-  install [step...]   install or repair (steps: preflight pacman dotfiles packages hardware
-                      aur system boot ai docker desktop agents verify; on demand: jocasta net ntfy)
+  install [step...]   install or repair (steps: preflight dotfiles packages hardware aur
+                      system boot ai docker desktop agents, then doctor; on demand: jocasta net ntfy)
+  install --first-boot   the default steps, then a reboot (the first login after the installer runs it)
   migrate backup|restore|clean   move a home folder between installs
 
 Agents
@@ -48,12 +49,10 @@ Agents
 Desktop (bound to keys)
   browser [URL]       the everyday browser
   open-url URL        route a link: localhost to the preview, else the browser
-  jump N [--con-id C|--app-id A]   move the user to workspace N (typing guard)
-  back                return to the workspace before the last jump
+  jump N [--con-id C]   move the user to workspace N (typing guard)
   focus [toggle|on|off]   focus mode (agents don't move you)
   snap                region screenshot for the boss
   shot region|full    screenshots
-  clip                clipboard history
   close               close the focused window (asks for the boss)
   power               power menu
   lock                lock the screen

@@ -107,10 +107,7 @@ cmd_attention() {
       source "$ULTRON_ROOT/lib/cmd/boss.sh"
       cmd_boss
     elif [[ -n "$want" ]]; then
-      local cur
-      cur=$(focused_ws)
-      if [[ "$cur" != "$want" ]]; then printf '%s\n' "$cur" >"$R/back"; fi
-      swaymsg "workspace \"$want\"" >/dev/null
+      goto_ws "$want"
       swaymsg '[urgent=latest] focus' >/dev/null 2>&1 || true
     elif ! swaymsg '[urgent=latest] focus' >/dev/null 2>&1; then
       desktop_notify "Nothing needs you" ""

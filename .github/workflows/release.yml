@@ -1,0 +1,24 @@
+name: release
+
+# A pushed v* tag builds the installer ISO for that tag and publishes it with its checksum.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build the ISO
+        run: docker run --rm --privileged -v "$PWD":/src -w /src archlinux:latest bash iso/build "$GITHUB_REF_NAME"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then pre=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${pre[@]}" out/*.iso out/*.sha256

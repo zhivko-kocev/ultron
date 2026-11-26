@@ -48,6 +48,7 @@ Moving from an existing system: [docs/migrate.md](docs/migrate.md).
 
 - `ultron update`: pulls this repo, reapplies the install, updates packages (with snapshots before and after), mise tools and Jocasta (only while Jocasta is closed), then runs `doctor`.
 - `ultron doctor [--deep]`: checks the whole setup and prints PASS, WARN or FAIL per item.
+- **Rolling back:** every pacman/yay run takes a snapshot before and after (5 are kept). At the boot menu, open Snapshots, pick one and boot it (it runs read-only with a RAM overlay). If it's good, run `sudo limine-snapper-restore` there, answer `r`, give the current system a description and reboot. Tested in the VM; pacman's stale lock from the "pre" snapshot is cleared at boot.
 
 ## Testing in a VM
 

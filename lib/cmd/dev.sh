@@ -71,6 +71,12 @@ _dev_remove() {
   [[ -n "$(_dev_version "$tool")" ]] || die "$tool isn't one of your global tools (see 'ultron dev list')"
   say "Removing $tool from your global tools…"
   mise unuse -g "$tool" || die "mise could not remove '$tool' (read its message above)"
+  # unuse only edits the config: drop the versions nothing else asks for, and their commands.
+  # Tools ultron itself pins system-wide (node for the agents) stay installed.
+  if ! grep -qsE "^[[:space:]]*\"?${tool}\"?[[:space:]]*=" /etc/mise/conf.d/ultron-tools.toml; then
+    mise prune -y "$tool" >/dev/null 2>&1 || true
+  fi
+  mise reshim
   ok "$tool removed. New terminals no longer have it"
 }
 

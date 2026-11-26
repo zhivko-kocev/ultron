@@ -184,6 +184,9 @@ _agent_remove() {
     have mise || die "mise isn't installed, so there's nothing it could remove"
     say "Removing $name ($tool)"
     mise unuse -g "$tool" || die "mise couldn't remove $tool (try: mise unuse -g $tool)"
+    # unuse only edits the config: drop the installed copy and its command too.
+    mise prune -y "$tool" >/dev/null 2>&1 || true
+    mise reshim
   else
     warn "$name wasn't installed by mise; uninstall '$bin' the way you installed it"
   fi

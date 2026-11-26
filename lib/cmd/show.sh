@@ -187,12 +187,19 @@ _show_close() {
   if [[ ! "$want" =~ ^(ultron-(review|watch)-[0-9]+|web|con:[0-9]+)$ ]]; then
     die "show close: '$want' is not a window ultron show opened (IDs come from: ultron show list)"
   fi
-  local rows oid con ws title n=0
+  local rows oid con ws title pid n=0
   rows=$(_show_rows)
   while IFS=$'\t' read -r oid con ws title; do
     if [[ "$oid" == "$want" ]]; then
       swaymsg "[con_id=$con] kill" >/dev/null
       n=$((n + 1))
+      if [[ "$want" == con:* ]]; then
+        # Viewers (imv was seen doing this) can ignore the close request; each is its own process,
+        # started here for this one file, so it is ended directly.
+        sleep 0.3
+        pid=$(swaymsg -t get_tree | jq -r --argjson id "$con" 'first(.. | objects | select(.id? == $id) | .pid) // empty')
+        if [[ "$pid" =~ ^[0-9]+$ ]]; then kill "$pid" 2>/dev/null || true; fi
+      fi
     fi
   done <<<"$rows"
   ((n)) || die "show close: no open window with id $want (see: ultron show list)"

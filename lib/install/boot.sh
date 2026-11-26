@@ -38,7 +38,8 @@ step_boot() {
 
   # 2. /etc/default/limine from the template. The command line comes from the running kernel on the first run,
   # then from /etc/default/limine itself (a later run may be booted from a snapshot).
-  cmdline=$(sed -n -E 's/^KERNEL_CMDLINE\[default\]="(.*)"$/\1/p' /etc/default/limine 2>/dev/null | head -n1)
+  cmdline=""
+  [[ -f /etc/default/limine ]] && cmdline=$(sed -n -E 's/^KERNEL_CMDLINE\[default\]="(.*)"$/\1/p' /etc/default/limine | head -n1)
   [[ -n "$cmdline" ]] || cmdline=$(_boot_cmdline)
   [[ "$cmdline" != *.snapshots* ]] || die "This boot is a snapshot (cmdline: $cmdline). Boot the normal Arch entry, then rerun: ultron install boot"
   say "Writing /etc/default/limine (cmdline: $cmdline)"

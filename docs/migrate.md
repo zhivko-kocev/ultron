@@ -128,21 +128,21 @@ Then go through the "Real" column of the verification table with the agent. The 
 
 If archinstall fails at the bootloader, the disk is already partitioned, encrypted and mounted at `/mnt`. In the live ISO:
 
-1. Find the root partition's UUID (the encrypted one, partition 2), for example `blkid -s UUID -o value /dev/nvme0n1p2`.
+1. Find the root partition's PARTUUID (the encrypted one, partition 2), for example `blkid -s PARTUUID -o value /dev/nvme0n1p2`.
 2. Enter the new system and install Limine to the fallback path:
 
        arch-chroot /mnt
        pacman -S limine
        install -D /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI
 
-3. Write `/boot/limine.conf` with one entry (put the UUID from step 1 in place of `<UUID>`):
+3. Write `/boot/limine.conf` with one entry (put the PARTUUID from step 1 in place of `<PARTUUID>`). archinstall's initramfs unlocks the disk with the `encrypt` hook, so the command line uses `cryptdevice=`:
 
        timeout: 3
 
        /Arch Linux
            protocol: linux
-           kernel_path: boot():/vmlinuz-linux
+           path: boot():/vmlinuz-linux
            module_path: boot():/initramfs-linux.img
-           cmdline: rd.luks.name=<UUID>=root root=/dev/mapper/root rootflags=subvol=@ rw quiet
+           cmdline: cryptdevice=PARTUUID=<PARTUUID>:root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs quiet
 
 4. Leave the chroot (`exit`), reboot, and continue with C6. `ultron install` later rewrites the boot menu properly.

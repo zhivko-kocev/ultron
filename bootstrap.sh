@@ -225,9 +225,9 @@ If it failed at the bootloader, finish by hand (docs/migrate.md, "archinstall fa
   write /boot/limine.conf with one entry:
     /Arch Linux
         protocol: linux
-        kernel_path: boot():/vmlinuz-linux
+        path: boot():/vmlinuz-linux
         module_path: boot():/initramfs-linux.img
-        cmdline: rd.luks.name=<blkid UUID of the 2nd partition>=root root=/dev/mapper/root rootflags=subvol=@ rw quiet
+        cmdline: cryptdevice=PARTUUID=<PARTUUID of the 2nd partition>:root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs quiet
 Then reboot and continue with: ~/Projects/ultron/bin/ultron install
 EOF
     exit 1

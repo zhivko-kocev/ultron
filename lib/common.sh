@@ -117,7 +117,8 @@ conf_get() {
   printf '%s\n' "$_v"
 }
 
-# conf_set KEY VALUE: create or replace KEY=VALUE in ultron.conf (the machine's own file).
+# conf_set KEY VALUE: create or replace KEY=VALUE in ultron.conf (the machine's own file). An empty
+# VALUE removes the line, so conf.d or the built-in default applies again.
 conf_set() {
   local key=$1 val=$2 tmp
   [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "not a setting name: $key"
@@ -126,7 +127,7 @@ conf_set() {
   [[ -e "$ULTRON_CONF" ]] || : >"$ULTRON_CONF"
   tmp=$(mktemp "$ULTRON_CONF_DIR/.ultron.conf.XXXXXX")
   grep -v -E "^[[:space:]]*${key}[[:space:]]*=" "$ULTRON_CONF" >"$tmp" || true
-  printf '%s=%s\n' "$key" "$val" >>"$tmp"
+  if [[ -n "$val" ]]; then printf '%s=%s\n' "$key" "$val" >>"$tmp"; fi
   mv "$tmp" "$ULTRON_CONF"
   _CONF_LOADED=0
 }

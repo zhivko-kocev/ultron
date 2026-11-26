@@ -34,7 +34,7 @@ cmd_conf() {
     conf_get "$2"
     ;;
   set)
-    (($# == 3)) || die "usage: ultron conf set KEY VALUE   (use \"\" for the default)"
+    (($# == 3)) || die "usage: ultron conf set KEY VALUE   (\"\" as VALUE goes back to the default)"
     _conf_known "$2" || die "unknown setting '$2'. Settings: ${_CONF_KEYS[*]}"
     conf_set "$2" "$3"
     ok "$2=$(conf_get "$2")"

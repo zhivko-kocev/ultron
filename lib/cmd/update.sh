@@ -29,7 +29,7 @@ cmd_update() {
 
   # 4. mise tools.
   say "Upgrading mise tools"
-  mise upgrade || warn "mise upgrade failed (see above)"
+  mise_gh upgrade || warn "mise upgrade failed (see above)"
 
   # 5. Jocasta from main.
   # Reinstalling under a running Jocasta breaks it (review item R10), so it waits until Jocasta is closed.

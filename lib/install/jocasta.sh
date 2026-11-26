@@ -24,7 +24,7 @@ _jocasta_src() {
     (
       cd "$JOCASTA_DIR"
       mise trust mise.toml
-      mise install --locked "${tools[@]}"
+      mise_gh install --locked "${tools[@]}"
       mise exec -- bun install --frozen-lockfile
       mise run build
     ) >&2 || die "The Jocasta build failed (see above). The omp boss keeps working (BOSS=omp)."
@@ -58,7 +58,7 @@ _jocasta_pin_omp() {
   install_root "$tmp" "$ULTRON_TOOLS_CONF" 0644
   rm -f "$tmp"
   mapfile -t tools < <(toml_tool_keys "$ULTRON_TOOLS_CONF")
-  mise install "${tools[@]}"
+  mise_gh install "${tools[@]}"
   mise reshim
 }
 

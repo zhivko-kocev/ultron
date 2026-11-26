@@ -8,7 +8,12 @@ step_agents() {
   ((${#tools[@]})) || die "$ULTRON_TOOLS_CONF lists no tools."
   say "Installing agent tools with mise: ${tools[*]}"
   # Only the tools named in the system conf; other mise configs are left alone.
-  mise install "${tools[@]}" || die "mise install failed (see above); rerun: ultron install agents"
+  if ! mise_gh install "${tools[@]}"; then
+    # `latest`/`lts` need a release lookup even when installed; a GitHub hiccup mustn't fail an update.
+    { omp --version >/dev/null 2>&1 && hunk --version >/dev/null 2>&1; } ||
+      die "mise install failed (see above); rerun: ultron install agents"
+    warn "mise install failed (see above), but omp and hunk work: keeping the installed versions"
+  fi
   mise reshim
   omp --version >/dev/null 2>&1 || die "omp doesn't run after mise install."
   hunk --version >/dev/null 2>&1 || die "hunk doesn't run after mise install."

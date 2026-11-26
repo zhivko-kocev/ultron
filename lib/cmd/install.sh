@@ -34,6 +34,14 @@ omp_pin() {
   sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" 2>/dev/null | head -n1
 }
 
+# mise_gh ARGS...: mise with the gh login's token, so its GitHub release lookups aren't held to the anonymous
+# limit of 60 requests an hour (hit in testing). Only mise sees the token: never AUR builds or project scripts.
+mise_gh() {
+  local token=""
+  if have gh; then token=$(gh auth token 2>/dev/null || true); fi
+  if [[ -n "$token" ]]; then MISE_GITHUB_TOKEN=$token mise "$@"; else mise "$@"; fi
+}
+
 # set_omp_settings: the two omp settings ultron needs; `jocasta setup` may reset them, so every step that
 # touches omp reapplies them.
 #  - commit role: the local model first. modelRoles is one record setting (`modelRoles.commit` isn't a key),

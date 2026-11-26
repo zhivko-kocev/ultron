@@ -212,7 +212,7 @@ cmd_doctor() {
 
   _check "UEFI boot" is_uefi
   _check "root is on LUKS" _root_on_luks
-  _check "/boot/limine.conf has kernel_path" sudo grep -q kernel_path /boot/limine.conf
+  _check "/boot/limine.conf has a kernel entry" sudo grep -qE '^[[:space:]]*(kernel_)?path:[[:space:]]*boot\(\)' /boot/limine.conf
   _check "limine-snapper-sync.service is enabled" systemctl is-enabled -q limine-snapper-sync.service
   _check "snapper has at least one snapshot of /" _snapper_has_entries
   _check "greetd autologin names $ULTRON_USER" _greetd_autologin

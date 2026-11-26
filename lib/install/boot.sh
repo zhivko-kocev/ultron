@@ -72,8 +72,9 @@ step_boot() {
   sudo limine-install --fallback || warn "limine-install --fallback failed"
   sudo limine-update || warn "limine-update failed"
 
-  # 5. Never leave an unbootable config behind.
-  if ! sudo grep -q 'kernel_path' /boot/limine.conf || ! sudo grep -qF -- "$cmdline" /boot/limine.conf; then
+  # 5. Never leave an unbootable config behind. Limine 9+ names the kernel `path:` (older: `kernel_path:`).
+  if ! sudo grep -qE '^[[:space:]]*(kernel_)?path:[[:space:]]*boot\(\)' /boot/limine.conf ||
+    ! sudo grep -qF -- "$cmdline" /boot/limine.conf; then
     sudo cp /boot/limine.conf.archinstall /boot/limine.conf
     sudo install -D -m 0644 /boot/limine.conf.archinstall /boot/EFI/BOOT/limine.conf
     die "The new /boot/limine.conf had no kernel entry or lost the kernel command line, so archinstall's config was put back. Rerun: ultron install boot"

@@ -1,0 +1,8 @@
+# AUR packages, built with yay
+limine-mkinitcpio-hook
+limine-snapper-sync
+docker-rootless-extras
+ntfysh-bin
+google-chrome
+stremio-service
+localsend-bin

@@ -1,0 +1,6 @@
+# Agent tools for every user, installed by `ultron install agents`.
+# `ultron install jocasta` rewrites the oh-my-pi version to the one Jocasta's README names.
+[tools]
+oh-my-pi = "19.2.0"
+hunk = "latest"
+node = "lts"

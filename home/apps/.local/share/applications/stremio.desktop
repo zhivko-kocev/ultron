@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Stremio
+Comment=Stremio web app with the local streaming server
+Exec=ultron stremio
+Icon=google-chrome
+Categories=AudioVideo;Video;
+Terminal=false

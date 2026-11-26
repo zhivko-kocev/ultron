@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# ask "question": one-shot answer from the local model (ollama, qwen3:4b by default).
+# Piped input is passed through: `git diff | ask "summarise this"`.
+set -euo pipefail
+
+if [[ $# -eq 0 && -t 0 ]]; then
+  echo 'Usage: ask "question"   (or: some-command | ask "what to do with it")' >&2
+  exit 2
+fi
+
+# When stdin is a pipe, ollama run reads it and adds it to the prompt; exec keeps that stdin.
+exec ollama run "${ULTRON_ASK_MODEL:-qwen3:4b}" --think=false "$*"

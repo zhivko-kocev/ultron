@@ -1,0 +1,5 @@
+# Docker, used rootless (official repos)
+docker
+docker-buildx
+docker-compose
+slirp4netns

@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# ultron-vm: test ultron in a QEMU/KVM virtual machine on the host (Phase B).
+#   ultron-vm create              download and check the Arch ISO, make the disk and UEFI vars
+#   ultron-vm run [--iso] [--nogl] start the VM (--iso boots the installer once)
+#   ultron-vm serve               serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
+#   ultron-vm destroy             delete the VM and its downloads
+set -euo pipefail
+
+STATE=${XDG_DATA_HOME:-$HOME/.local/share}/ultron-vm
+MIRROR=https://geo.mirror.pkgbuild.com/iso/latest
+FALLBACK_ISO=archlinux-2026.11.01-x86_64.iso
+OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+OVMF_VARS=/usr/share/edk2/x64/OVMF_VARS.4m.fd
+DISK_SIZE=40G
+SERVE_PORT=8765
+
+say() { printf '==> %s\n' "$*"; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+die() {
+  printf 'ultron-vm: %s\n' "$*" >&2
+  exit 1
+}
+need() { command -v "$1" >/dev/null 2>&1 || die "$1 is missing. Install it with: sudo pacman -S --needed $2"; }
+
+usage() {
+  cat <<'EOF'
+Usage: ultron-vm <command>
+  create               download and check the Arch ISO, make the 40G disk and the UEFI vars
+  run [--iso] [--nogl] start the VM; --iso boots the installer once; --nogl turns off 3D
+  serve                serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
+  destroy              delete the VM disk and downloads (asks first)
+EOF
+}
+
+# The ISO named in sha256sums.txt, or the plan's name when that file has none.
+iso_name() {
+  local name=""
+  if [[ -f $STATE/sha256sums.txt ]]; then
+    name=$(awk '$2 ~ /^archlinux-[0-9.]+-x86_64\.iso$/ { print $2; exit }' "$STATE/sha256sums.txt")
+  fi
+  printf '%s\n' "${name:-$FALLBACK_ISO}"
+}
+
+fetch() { # fetch URL FILE: download unless FILE exists (partial downloads resume)
+  local url=$1 file=$2
+  if [[ -f $file ]]; then
+    say "Already downloaded: ${file##*/}"
+    return 0
+  fi
+  say "Downloading ${file##*/}"
+  curl -fL --retry 3 -C - -o "$file.part" "$url" || die "Download failed: $url (run create again to resume)"
+  mv "$file.part" "$file"
+}
+
+verify_signature() { # verify_signature ISO
+  local iso=$1
+  if pacman-key -v "$iso.sig" >/dev/null 2>&1; then
+    say "Signature OK (pacman keyring)"
+    return 0
+  fi
+  if command -v gpg >/dev/null 2>&1 &&
+    gpg --keyserver-options auto-key-retrieve --verify "$iso.sig" "$iso" >/dev/null 2>&1; then
+    say "Signature OK (gpg with key retrieval)"
+    return 0
+  fi
+  warn "Could not check the ISO's signature (no access to the pacman keyring, and gpg could not fetch the key)."
+  warn "Continuing because the SHA-256 checksum matched. To check by hand: pacman-key -v $iso.sig"
+}
+
+cmd_create() {
+  need curl curl
+  need sha256sum coreutils
+  need qemu-img qemu-desktop
+  [[ -f $OVMF_VARS ]] || die "UEFI firmware is missing ($OVMF_VARS). Install it with: sudo pacman -S --needed edk2-ovmf"
+
+  mkdir -p "$STATE"
+  cd "$STATE"
+
+  local free_gb
+  free_gb=$(df -BG --output=avail "$STATE" | tail -n1 | tr -dc '0-9')
+  if ((free_gb < 60)); then
+    warn "Only ${free_gb} GB free in $STATE; the VM may need up to 60 GB."
+  fi
+
+  fetch "$MIRROR/sha256sums.txt" sha256sums.txt
+  local iso
+  iso=$(iso_name)
+  fetch "$MIRROR/$iso" "$iso"
+  fetch "$MIRROR/$iso.sig" "$iso.sig"
+
+  say "Checking the ISO's SHA-256 checksum"
+  grep -E "[[:space:]]\*?$iso\$" sha256sums.txt | sha256sum -c --ignore-missing - ||
+    die "The ISO's checksum does not match. Delete $STATE/$iso and run create again."
+  verify_signature "$iso"
+
+  if [[ -f disk.qcow2 ]]; then
+    say "Disk already exists: $STATE/disk.qcow2"
+  else
+    say "Creating a $DISK_SIZE disk"
+    qemu-img create -f qcow2 disk.qcow2 "$DISK_SIZE"
+  fi
+  if [[ -f vars.fd ]]; then
+    say "UEFI variables already exist"
+  else
+    say "Copying the UEFI variables"
+    cp "$OVMF_VARS" vars.fd
+  fi
+  say "Ready. Start the installer with: ultron-vm run --iso"
+}
+
+# shellcheck disable=SC2054 # qemu options are comma-separated by design
+cmd_run() {
+  local with_iso=0 gl=1 arg
+  for arg in "$@"; do
+    case $arg in
+    --iso) with_iso=1 ;;
+    --nogl) gl=0 ;;
+    *) die "Unknown option for run: $arg (use --iso and/or --nogl)" ;;
+    esac
+  done
+  need qemu-system-x86_64 qemu-desktop
+  [[ -e /dev/kvm ]] || die "/dev/kvm is missing: turn on SVM in the BIOS."
+  [[ -f $OVMF_CODE ]] || die "UEFI firmware is missing ($OVMF_CODE). Install it with: sudo pacman -S --needed edk2-ovmf"
+  [[ -d $STATE ]] || die "No VM yet. Run: ultron-vm create"
+  cd "$STATE"
+  [[ -f disk.qcow2 && -f vars.fd ]] || die "The VM disk or UEFI vars are missing. Run: ultron-vm create"
+
+  local qemu=(
+    qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 6 -m 6144
+    -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE"
+    -drive if=pflash,format=raw,file=vars.fd
+    -drive file=disk.qcow2,if=virtio,format=qcow2
+  )
+  if ((gl)); then
+    qemu+=(-device virtio-vga-gl -display gtk,gl=on)
+  else
+    qemu+=(-device virtio-vga -display gtk)
+  fi
+  qemu+=(
+    -nic user,model=virtio-net-pci
+    -device virtio-tablet-pci -device virtio-keyboard-pci
+    -audiodev pipewire,id=a0 -device ich9-intel-hda -device hda-duplex,audiodev=a0
+  )
+  if ((with_iso)); then
+    local iso
+    iso=$(iso_name)
+    [[ -f $iso ]] || die "The ISO $iso is missing. Run: ultron-vm create"
+    qemu+=(-cdrom "$iso" -boot once=d)
+  fi
+
+  say "Starting the VM (Ctrl+Alt+G grabs input so Super keys reach the VM; press it again to release)"
+  exec "${qemu[@]}"
+}
+
+cmd_serve() {
+  local dist=$HOME/Projects/jocasta/dist
+  need python3 python
+  [[ -d $dist ]] || die "$dist is missing. Build Jocasta first: cd ~/Projects/jocasta && mise run build"
+  say "Serving $dist at http://127.0.0.1:$SERVE_PORT (the VM uses http://10.0.2.2:$SERVE_PORT). Ctrl+C stops it."
+  exec python3 -m http.server "$SERVE_PORT" --bind 127.0.0.1 --directory "$dist"
+}
+
+cmd_destroy() {
+  if [[ ! -d $STATE ]]; then
+    say "Nothing to delete: $STATE does not exist"
+    return 0
+  fi
+  du -sh "$STATE" 2>/dev/null || true
+  local answer=""
+  read -r -p "Delete the VM and its downloads in $STATE? [y/N] " answer || true
+  case $answer in
+  y | Y | yes | YES) ;;
+  *)
+    say "Kept $STATE"
+    return 0
+    ;;
+  esac
+  rm -rf -- "$STATE"
+  say "Deleted $STATE"
+}
+
+main() {
+  local cmd=${1:-}
+  (($# > 0)) && shift
+  case $cmd in
+  create) cmd_create "$@" ;;
+  run) cmd_run "$@" ;;
+  serve) cmd_serve "$@" ;;
+  destroy) cmd_destroy "$@" ;;
+  -h | --help | help | "") usage ;;
+  *)
+    usage >&2
+    die "Unknown command: $cmd"
+    ;;
+  esac
+}
+
+main "$@"

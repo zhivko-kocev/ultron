@@ -1,0 +1,5 @@
+# lib/ files are sourced together by bin/ultron: globals are set in one file (common.sh, install.sh)
+# and used in another, which shellcheck cannot see when it checks each file alone.
+disable=SC2034,SC2154
+external-sources=true
+source-path=SCRIPTDIR

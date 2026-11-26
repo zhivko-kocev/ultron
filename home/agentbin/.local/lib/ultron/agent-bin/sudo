@@ -1,0 +1,3 @@
+#!/bin/sh
+# First on PATH only inside the boss window: an agent's sudo always asks through the askpass popup.
+exec /usr/bin/sudo -A "$@"

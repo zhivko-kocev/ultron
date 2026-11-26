@@ -1,0 +1,16 @@
+# Editor and OS clutter
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# VM images and downloads never belong here (they live in ~/.local/share/ultron-vm)
+*.iso
+*.qcow2
+*.fd
+
+# Secrets and local overrides
+.env
+*.env
+ntfy.env

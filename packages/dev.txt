@@ -1,0 +1,6 @@
+# Native toolchain (official repos)
+clang
+llvm
+lld
+cmake
+ninja

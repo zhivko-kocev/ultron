@@ -1,0 +1,8 @@
+[Unit]
+Description=ultron attention daemon
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/ultron attentiond
+Restart=on-failure
+RestartSec=2

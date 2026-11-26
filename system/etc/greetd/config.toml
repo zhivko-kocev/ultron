@@ -1,0 +1,10 @@
+[terminal]
+vt = 1
+
+[default_session]
+command = "agreety --cmd /usr/lib/ultron/session"
+user = "greeter"
+
+[initial_session]
+command = "/usr/lib/ultron/session"
+user = "zhivko-kocev"

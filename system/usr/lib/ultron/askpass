@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ultron askpass: sudo -A runs this as the user. It shows the exact command and folder,
+# waits for the typing guard, pushes to the phone when away, then asks in a fuzzel popup.
+# It prints the password on stdout; Esc or the 10-minute timeout make sudo fail.
+set -euo pipefail
+
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
+rundir=$XDG_RUNTIME_DIR/ultron
+ntfy_env=/etc/ultron/ntfy.env
+
+# The parent is sudo: its command line (NUL-separated) and working folder.
+args=()
+if [[ -r /proc/$PPID/cmdline ]]; then
+  mapfile -d '' -t args </proc/"$PPID"/cmdline
+fi
+folder=$(readlink "/proc/$PPID/cwd" 2>/dev/null || echo "?")
+
+# Drop the leading sudo and its options, keeping only the command it will run.
+if ((${#args[@]} > 0)) && [[ ${args[0]##*/} == sudo ]]; then
+  args=("${args[@]:1}")
+  while ((${#args[@]} > 0)); do
+    a=${args[0]}
+    case $a in
+    --)
+      args=("${args[@]:1}")
+      break
+      ;;
+    --user | --group | --close-from | --chdir | --host | --prompt | --role | --type | --command-timeout | --other-user | --chroot)
+      args=("${args[@]:2}")
+      ;;
+    --*)
+      args=("${args[@]:1}")
+      ;;
+    -?*)
+      # Short options may be grouped (-Ak); an option taking a value may have it attached (-uroot) or next.
+      opts=${a#-}
+      skip=1
+      i=0
+      while ((i < ${#opts})); do
+        c=${opts:i:1}
+        case $c in
+        u | g | C | D | h | p | r | t | T | U | R)
+          ((i + 1 == ${#opts})) && skip=2
+          break
+          ;;
+        esac
+        ((i += 1))
+      done
+      args=("${args[@]:skip}")
+      ;;
+    *)
+      break
+      ;;
+    esac
+  done
+fi
+command="${args[*]:-}"
+[[ -n $command ]] || command="(sudo validation)"
+
+# Typing guard: wait up to 30 s until there has been no input for 2 s.
+for ((n = 0; n < 300; n++)); do
+  [[ -e $rundir/idle2 ]] && break
+  sleep 0.1
+done
+
+# Away (or locked): push to the phone, if phone alerts are set up.
+if [[ -e $rundir/away ]] || pgrep -x swaylock >/dev/null 2>&1; then
+  if [[ -r $ntfy_env ]]; then
+    url="" token=""
+    while IFS= read -r line || [[ -n $line ]]; do
+      case $line in
+      NTFY_URL=*) url=${line#*=} ;;
+      NTFY_TOKEN=*) token=${line#*=} ;;
+      esac
+    done <"$ntfy_env"
+    if [[ -n $url && -n $token ]]; then
+      curl -fsS -m 10 \
+        -H "Authorization: Bearer $token" \
+        -H "Title: Root access requested" \
+        -H "Priority: high" \
+        -d "$command"$'\n'"in $folder" \
+        "$url/ultron-alerts" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
+notify-send -u critical -a ultron "Root access requested" "$command"$'\n'"in $folder" 2>/dev/null || true
+
+# fuzzel prints the typed password on stdout; its exit status (or timeout's) becomes ours.
+exec timeout 600 fuzzel --dmenu --password --lines 0 --prompt "sudo ▸ " \
+  --mesg "Run as root: $command" </dev/null

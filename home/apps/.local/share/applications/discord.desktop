@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Discord
+Comment=Discord in a Chrome app window
+Exec=google-chrome-stable --app=https://discord.com/channels/@me
+Icon=google-chrome
+Categories=Network;Chat;
+Terminal=false

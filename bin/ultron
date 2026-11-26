@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ultron: the OS command. `ultron <cmd> [args]` runs cmd_<cmd> from lib/cmd/<cmd>.sh.
+set -euo pipefail
+
+ULTRON_ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+export ULTRON_ROOT
+# shellcheck source=../lib/common.sh
+source "$ULTRON_ROOT/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+usage: ultron <command> [args]
+
+  install [step...]   install or repair (steps: preflight pacman packages aur system boot
+                      desktop agents docker ai dotfiles verify; on demand: jocasta net ntfy)
+  update              pull, reinstall, upgrade packages and tools, rebuild Jocasta
+  doctor [--deep]     check the whole system
+  show review|web|watch ...   open something for the user on workspace 2 / 3 / 4
+  open-url URL        route a link: localhost to the preview, else Chrome
+  jump N [--con-id C|--app-id A]   move the user to workspace N (typing guard)
+  back                return to the workspace before the last jump
+  focus [toggle|on|off]   focus mode (no jumps)
+  attention [--away]  go to whatever needs you
+  boss [--start]      start or show the boss window
+  task                Jocasta's New thread question
+  snap                region screenshot for the boss
+  shot region|full    screenshots
+  clip                clipboard history
+  close               close the focused window (asks for the boss)
+  power               power menu
+  lock                lock the screen
+  keys                key cheat sheet
+  notify [--phone] [--urgent] TITLE BODY
+  status              swaybar status line
+  attentiond          attention daemon (run by systemd)
+  note jocasta        note a Jocasta friction point
+  stremio             Stremio
+  migrate backup|restore ...   the one-time migration copy
+EOF
+}
+
+main() {
+  local cmd=${1:-}
+  case $cmd in
+  "" | -h | --help | help)
+    usage
+    return 0
+    ;;
+  esac
+  shift
+  local file="$ULTRON_ROOT/lib/cmd/$cmd.sh"
+  [[ "$cmd" =~ ^[a-z][a-z-]*$ && -f "$file" ]] || {
+    usage >&2
+    die "unknown command: $cmd"
+  }
+  # shellcheck source=/dev/null
+  source "$file"
+  "cmd_${cmd//-/_}" "$@"
+}
+
+main "$@"

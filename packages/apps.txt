@@ -1,0 +1,5 @@
+# Everyday apps (official repos)
+chromium
+zed
+qbittorrent
+libreoffice-fresh

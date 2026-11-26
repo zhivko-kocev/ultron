@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ultron link router
+Comment=Opens localhost pages in the preview window on workspace 3, everything else in Chrome
+Exec=ultron open-url %u
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;application/xhtml+xml;
+NoDisplay=true
+Terminal=false

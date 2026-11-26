@@ -1,0 +1,19 @@
+# ntfy server for ultron phone alerts. Filled in by `ultron install ntfy`.
+base-url: "@BASE_URL@"
+listen-http: "127.0.0.1:2586"
+behind-proxy: true
+
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "24h"
+
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+auth-users:
+  - "zhivko:@HASH@:user"
+auth-access:
+  - "zhivko:ultron-*:rw"
+auth-tokens:
+  - "zhivko:@TOKEN@:ultron"
+
+# Needed for iOS push notifications.
+upstream-base-url: "https://ntfy.sh"

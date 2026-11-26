@@ -122,6 +122,15 @@ _check_ai() {
   else
     _warnl "omp commit role is '${role:-unset}', not ollama/ first (ultron install ai sets it again)"
   fi
+  # swayidle turns off all its timeouts while any logind idle inhibitor is held (typing guard, away, lock).
+  local idle_blockers
+  idle_blockers=$(systemd-inhibit --list --no-pager --no-legend 2>/dev/null |
+    awk '$6 ~ /(^|:)idle(:|$)/ && $NF == "block" { print $5 }' | sort -u | paste -sd, - || true)
+  if [[ -z "$idle_blockers" ]]; then
+    _pass "no idle inhibitor turns off swayidle"
+  else
+    _fail "idle inhibitors held by $idle_blockers turn off swayidle (typing guard, away, lock); omp: ultron install agents, then restart the boss"
+  fi
 }
 
 _check_jocasta() {

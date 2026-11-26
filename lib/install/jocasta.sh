@@ -115,8 +115,8 @@ YAML
     ok "Wrote $projects"
   fi
 
-  # 8. Commit role (setup may reset it) and the boss.
-  set_commit_role
+  # 8. omp settings (setup may reset them) and the boss.
+  set_omp_settings
   conf_set BOSS jocasta
   ok "BOSS=jocasta in $ULTRON_CONF"
 

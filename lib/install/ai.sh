@@ -48,5 +48,5 @@ step_ai() {
     say "Pulling qwen3:4b (about 2.5 GB)"
     ollama pull qwen3:4b || die "ollama pull failed; rerun: ultron install ai"
   fi
-  set_commit_role
+  set_omp_settings
 }

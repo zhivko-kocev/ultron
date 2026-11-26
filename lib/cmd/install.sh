@@ -34,20 +34,26 @@ omp_pin() {
   sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" 2>/dev/null | head -n1
 }
 
-# set_commit_role: point omp's commit role at the local model first. modelRoles is one record setting
-# (`modelRoles.commit` isn't a key), so the current record is read, merged and written back.
-set_commit_role() {
+# set_omp_settings: the two omp settings ultron needs; `jocasta setup` may reset them, so every step that
+# touches omp reapplies them.
+#  - commit role: the local model first. modelRoles is one record setting (`modelRoles.commit` isn't a key),
+#    so the current record is read, merged and written back.
+#  - power.sleepPrevention off: omp's default ("idle") holds a logind idle inhibitor while it runs, and
+#    swayidle then turns off every timeout (typing guard, away, lock, screen off). Nothing in ultron
+#    suspends on idle, so there is nothing for omp to prevent.
+set_omp_settings() {
   if ! have omp; then
-    warn "omp isn't installed yet, so its commit role wasn't set"
+    warn "omp isn't installed yet, so its settings weren't applied"
     return 0
   fi
   local roles
   roles=$(omp config get modelRoles 2>/dev/null) || roles='{}'
-  roles=$(jq -c --arg v "$OMP_COMMIT_ROLE" '(. // {}) + {commit: $v}' <<<"$roles" 2>/dev/null) || {
+  if roles=$(jq -c --arg v "$OMP_COMMIT_ROLE" '(. // {}) + {commit: $v}' <<<"$roles" 2>/dev/null); then
+    omp config set modelRoles "$roles" >/dev/null || warn "couldn't set omp's commit role"
+  else
     warn "omp's modelRoles isn't JSON, so the commit role wasn't set"
-    return 0
-  }
-  omp config set modelRoles "$roles" >/dev/null || warn "couldn't set omp's commit role"
+  fi
+  omp config set power.sleepPrevention off >/dev/null || warn "couldn't turn off omp's idle inhibitor"
 }
 
 _valid_step() {

@@ -13,4 +13,5 @@ step_agents() {
   omp --version >/dev/null 2>&1 || die "omp doesn't run after mise install."
   hunk --version >/dev/null 2>&1 || die "hunk doesn't run after mise install."
   ok "omp $(omp --version 2>/dev/null | head -n1), hunk $(hunk --version 2>/dev/null | head -n1)"
+  set_omp_settings
 }

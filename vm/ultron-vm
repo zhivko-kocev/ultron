@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # ultron-vm: test ultron in a QEMU/KVM virtual machine on the host (Phase B).
 #   ultron-vm create              download and check the Arch ISO, make the disk and UEFI vars
-#   ultron-vm run [--iso] [--nogl] start the VM (--iso boots the installer once)
+#   ultron-vm run [--iso] [--nogl] start the VM (--iso boots the installer)
 #   ultron-vm serve               serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
+#   ultron-vm type TEXT / key COMBO / shot FILE.png   drive a running VM (QMP)
+#   ultron-vm ssh [CMD...]        ssh into the VM (needs sshd and your key in the VM)
 #   ultron-vm destroy             delete the VM and its downloads
 set -euo pipefail
 
@@ -13,6 +15,8 @@ OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
 OVMF_VARS=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 DISK_SIZE=40G
 SERVE_PORT=8765
+SSH_PORT=2222
+QMP_SOCK=$STATE/qmp.sock
 
 say() { printf '==> %s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
@@ -26,8 +30,12 @@ usage() {
   cat <<'EOF'
 Usage: ultron-vm <command>
   create               download and check the Arch ISO, make the 40G disk and the UEFI vars
-  run [--iso] [--nogl] start the VM; --iso boots the installer once; --nogl turns off 3D
+  run [--iso] [--nogl] start the VM; --iso boots the installer; --nogl turns off 3D
   serve                serve ~/Projects/jocasta/dist to the VM at http://10.0.2.2:8765
+  type TEXT            type TEXT into the VM (\n is Enter)
+  key COMBO            press one key combination, like ret, ctrl-alt-f2 or meta_l-ret
+  shot FILE.png        save a screenshot of the VM's screen
+  ssh [CMD...]         ssh to zhivko-kocev@ the VM (port 2222 on 127.0.0.1)
   destroy              delete the VM disk and downloads (asks first)
 EOF
 }
@@ -129,7 +137,9 @@ cmd_run() {
     qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 6 -m 6144
     -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE"
     -drive if=pflash,format=raw,file=vars.fd
-    -drive file=disk.qcow2,if=virtio,format=qcow2
+    -drive file=disk.qcow2,if=none,id=hd,format=qcow2
+    -device virtio-blk-pci,drive=hd,bootindex=1
+    -qmp "unix:$QMP_SOCK,server=on,wait=off"
   )
   if ((gl)); then
     qemu+=(-device virtio-vga-gl -display gtk,gl=on)
@@ -137,7 +147,7 @@ cmd_run() {
     qemu+=(-device virtio-vga -display gtk)
   fi
   qemu+=(
-    -nic user,model=virtio-net-pci
+    -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
     -device virtio-tablet-pci -device virtio-keyboard-pci
     -audiodev pipewire,id=a0 -device ich9-intel-hda -device hda-duplex,audiodev=a0
   )
@@ -145,7 +155,8 @@ cmd_run() {
     local iso
     iso=$(iso_name)
     [[ -f $iso ]] || die "The ISO $iso is missing. Run: ultron-vm create"
-    qemu+=(-cdrom "$iso" -boot once=d)
+    # bootindex, not -boot once=d: OVMF follows its saved boot order and ignores -boot once.
+    qemu+=(-drive "file=$iso,if=none,id=cd,media=cdrom,readonly=on" -device ide-cd,drive=cd,bootindex=0)
   fi
 
   say "Starting the VM (Ctrl+Alt+G grabs input so Super keys reach the VM; press it again to release)"
@@ -158,6 +169,80 @@ cmd_serve() {
   [[ -d $dist ]] || die "$dist is missing. Build Jocasta first: cd ~/Projects/jocasta && mise run build"
   say "Serving $dist at http://127.0.0.1:$SERVE_PORT (the VM uses http://10.0.2.2:$SERVE_PORT). Ctrl+C stops it."
   exec python3 -m http.server "$SERVE_PORT" --bind 127.0.0.1 --directory "$dist"
+}
+
+# qmp COMMAND_JSON...: send QMP commands to the running VM, one after the other.
+qmp() {
+  [[ -S $QMP_SOCK ]] || die "The VM isn't running (no $QMP_SOCK). Start it with: ultron-vm run"
+  python3 - "$QMP_SOCK" "$@" <<'PY'
+import json, socket, sys, time
+s = socket.socket(socket.AF_UNIX)
+s.connect(sys.argv[1])
+f = s.makefile("rw")
+f.readline()
+def call(cmd):
+    f.write(json.dumps(cmd) + "\n"); f.flush()
+    while True:
+        r = json.loads(f.readline())
+        if "return" in r: return r["return"]
+        if "error" in r: sys.exit("qmp: " + r["error"]["desc"])
+call({"execute": "qmp_capabilities"})
+for arg in sys.argv[2:]:
+    call(json.loads(arg)); time.sleep(0.02)
+PY
+}
+
+# keys_json COMBO: send-key JSON for a combo like "ctrl-alt-f2" (qcode names joined by "-").
+keys_json() {
+  local IFS=- k out=""
+  for k in $1; do out+="${out:+,}{\"type\":\"qcode\",\"data\":\"$k\"}"; done
+  printf '{"execute":"send-key","arguments":{"keys":[%s]}}' "$out"
+}
+
+cmd_key() {
+  [[ $# -gt 0 ]] || die "usage: ultron-vm key COMBO (e.g. ret, ctrl-alt-f2)"
+  local c cmds=()
+  for c in "$@"; do cmds+=("$(keys_json "$c")"); done
+  qmp "${cmds[@]}"
+}
+
+cmd_type() {
+  [[ $# -gt 0 ]] || die 'usage: ultron-vm type TEXT  (\n is Enter)'
+  local text=$1 i ch combo cmds=()
+  text=${text//\\n/$'\n'}
+  for ((i = 0; i < ${#text}; i++)); do
+    ch=${text:i:1}
+    case $ch in
+    [a-z0-9]) combo=$ch ;;
+    [A-Z]) combo="shift-${ch,}" ;;
+    ' ') combo=spc ;;
+    $'\n') combo=ret ;;
+    $'\t') combo=tab ;;
+    -) combo=minus ;; =) combo=equal ;; '[') combo=bracket_left ;; ']') combo=bracket_right ;;
+    \\) combo=backslash ;; ';') combo=semicolon ;; "'") combo=apostrophe ;; '`') combo=grave_accent ;;
+    ,) combo=comma ;; .) combo="dot" ;; /) combo=slash ;;
+    '!') combo=shift-1 ;; @) combo=shift-2 ;; '#') combo=shift-3 ;; '$') combo=shift-4 ;; %) combo=shift-5 ;;
+    ^) combo=shift-6 ;; '&') combo=shift-7 ;; '*') combo=shift-8 ;; '(') combo=shift-9 ;; ')') combo=shift-0 ;;
+    _) combo=shift-minus ;; +) combo=shift-equal ;; '{') combo=shift-bracket_left ;; '}') combo=shift-bracket_right ;;
+    '|') combo=shift-backslash ;; :) combo=shift-semicolon ;; '"') combo=shift-apostrophe ;; '~') combo=shift-grave_accent ;;
+    '<') combo=shift-comma ;; '>') combo=shift-dot ;; '?') combo=shift-slash ;;
+    *) die "Can't type '$ch' into the VM" ;;
+    esac
+    cmds+=("$(keys_json "$combo")")
+  done
+  qmp "${cmds[@]}"
+}
+
+cmd_shot() {
+  local file=${1:?usage: ultron-vm shot FILE.png}
+  [[ $file == /* ]] || file=$PWD/$file
+  qmp "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"$file\",\"format\":\"png\"}}"
+  say "Saved $file"
+}
+
+cmd_ssh() {
+  exec ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    zhivko-kocev@127.0.0.1 "$@"
 }
 
 cmd_destroy() {
@@ -186,6 +271,10 @@ main() {
   create) cmd_create "$@" ;;
   run) cmd_run "$@" ;;
   serve) cmd_serve "$@" ;;
+  type) cmd_type "$@" ;;
+  key) cmd_key "$@" ;;
+  shot) cmd_shot "$@" ;;
+  ssh) cmd_ssh "$@" ;;
   destroy) cmd_destroy "$@" ;;
   -h | --help | help | "") usage ;;
   *)

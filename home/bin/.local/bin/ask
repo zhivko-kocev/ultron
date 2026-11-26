@@ -7,6 +7,10 @@ if [[ $# -eq 0 && -t 0 ]]; then
   echo 'Usage: ask "question"   (or: some-command | ask "what to do with it")' >&2
   exit 2
 fi
+if ! command -v ollama >/dev/null 2>&1; then
+  echo "ask: local AI isn't installed on this machine. To add it: ultron conf set LOCAL_AI yes, then ultron install packages ai" >&2
+  exit 1
+fi
 
 model=${ULTRON_ASK_MODEL:-}
 if [[ -z "$model" ]] && command -v ultron >/dev/null 2>&1; then

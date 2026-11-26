@@ -7,8 +7,10 @@
 #   block:FILE  FILE gets a short ultron block between <!-- ultron:begin --> and <!-- ultron:end -->
 #   -           nothing
 # Your own ~/.config/ultron/agents.tsv has the same columns, is read after this file and wins by name.
+# The mise tools below are mise's own registry names (`mise registry`), so mise picks the install method
+# each vendor supports (claude and codex as native binaries, gemini and opencode through npm).
 omp	oh-my-pi	omp	skills:~/.agents/skills
-claude	npm:@anthropic-ai/claude-code	claude	link:~/.claude/skills/ultron
-codex	npm:@openai/codex	codex	block:~/.codex/AGENTS.md
-gemini	npm:@google/gemini-cli	gemini	block:~/.gemini/GEMINI.md
-opencode	npm:opencode-ai	opencode	block:~/.config/opencode/AGENTS.md
+claude	claude	claude	link:~/.claude/skills/ultron
+codex	codex	codex	block:~/.codex/AGENTS.md
+gemini	gemini	gemini	block:~/.gemini/GEMINI.md
+opencode	opencode	opencode	block:~/.config/opencode/AGENTS.md

@@ -207,7 +207,8 @@ _migrate_restore() {
       printf '/%s\n' "${l#"$HOME/"}" >>"$list"
       n_links=$((n_links + 1))
     fi
-  done < <(find "$HOME" -xdev \( -path "$HOME/Projects/ultron" -o -path "$HOME/Projects/dotfiles" \) -prune -o -type l -print0)
+  # 2>/dev/null: rootless Docker keeps folders the user can't read (its overlay work dirs); no stow link is there.
+  done < <(find "$HOME" -xdev \( -path "$HOME/Projects/ultron" -o -path "$HOME/Projects/dotfiles" \) -prune -o -type l -print0 2>/dev/null)
   printf '%s\n' "${MIGRATE_RESTORE_EXCLUDES[@]}" >>"$list"
   echo "Skipping $n_links linked files and ${#MIGRATE_RESTORE_EXCLUDES[@]} Omarchy/ultron paths"
 

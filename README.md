@@ -39,7 +39,7 @@ Coming from another Linux install on the same disk? [docs/migrate.md](docs/migra
 | Super+M | focus mode: agents can't move you, notifications wait |
 | Super+Shift+S | screenshot a region and hand it to the boss |
 
-Full list: [docs/keys.md](docs/keys.md).
+Super+K lists every key, read from the sway config, so it is always current; the agent keys are explained in [docs/keys.md](docs/keys.md). The words ultron uses (workspace, boss, thread, show, attention request…) are in [GLOSSARY.md](GLOSSARY.md).
 
 | Workspace | What lives there |
 |---|---|
@@ -90,7 +90,7 @@ Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greet
 | `home/`, `templates/`, `themes/`, `skel/` | desktop config, themed templates, themes, starter shell |
 | `agents/` | the agent registry |
 | `vm/` | test the whole install in a QEMU VM |
-| `docs/` | keys, customizing, agents, security, firmware, migration, Jocasta |
+| `docs/` | keys, customizing, agents, security, firmware, migration, Jocasta; `docs/adr/` records why the big choices were made |
 
 ## Developing ultron
 

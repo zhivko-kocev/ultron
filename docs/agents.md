@@ -41,7 +41,7 @@ ultron agent remove codex
 
 Installing all four and running `--version` was tested. The guide locations follow each agent's documentation at the time of writing and were not tested with a signed-in agent: if yours doesn't seem to know about ultron, tell it to run `ultron guide`, and fix the location in `~/.config/ultron/agents.tsv` (below).
 
-A block is two lines between `<!-- ultron:begin -->` and `<!-- ultron:end -->`; the rest of the file is never touched, and `remove` takes only the block out. A real folder where a link would go is left alone. `remove` also uninstalls the tool, and if the agent was the boss, sets the boss back to omp.
+A block is two lines between `<!-- ultron:begin -->` and `<!-- ultron:end -->`; the rest of the file is never touched, and `remove` takes only the block out. A real folder where a link would go is left alone. `remove` also uninstalls the tool, and if the agent was the boss, sets the boss back to the default (`BOSS`, Jocasta unless your settings say otherwise).
 
 Tools installed this way are listed in your mise config (`~/.config/mise/config.toml`). If your dotfiles track that file, `add` and `remove` change it there.
 

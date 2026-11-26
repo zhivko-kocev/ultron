@@ -20,7 +20,7 @@ ultron is a set of bash scripts that turn a fresh Arch install into an agent-fir
 4. Steps are idempotent: running `ultron install` twice changes nothing the second time.
 5. Root: only install steps use `sudo`, and only steps listed in `ULTRON_ROOT_STEPS`. Third-party code (mise tools, builds) runs after `sudo_drop`, with one exception: during `ultron install` the ticket is alive while AUR packages build and the dotfiles installer runs (a fresh machine holds nothing yet). `ultron update` drops it before AUR builds. `ultron doctor` must work without sudo.
 6. Messages are for people who don't know Arch: say what happened and what to run next.
-7. A user-visible change updates the docs in the same commit: `docs/keys.md` must match `home/sway/.config/sway/config` exactly; settings are listed in `docs/customize.md`; agent-facing behaviour in `home/skill/.agents/skills/ultron/SKILL.md`.
+7. A user-visible change updates the docs in the same commit: `ultron keys` (Super+K) reads the keys from `home/sway/.config/sway/config` itself, and `docs/keys.md` lists exactly the bindings under its `# Agentic keys` comment (`tests/keys.sh` checks both); settings are listed in `docs/customize.md`; agent-facing behaviour in `home/skill/.agents/skills/ultron/SKILL.md`. Use the words of `GLOSSARY.md` (Jocasta's tabs are "Jocasta tabs", never "workspaces"). A change of a default or of behaviour people rely on gets a short record in `docs/adr/` (context, decision, rejected alternative).
 8. No secrets in commits: `git config core.hooksPath .githooks` enables the gitleaks check.
 
 ## Testing

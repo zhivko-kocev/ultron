@@ -64,7 +64,7 @@ output DP-1 mode 2560x1440@144Hz scale 1.25
 assign [app_id="^org.telegram.desktop$"] workspace 7:chat
 ```
 
-To replace one of ultron's keys, bind the same key again in your file: write `bindsym --no-warn $mod+…` so sway doesn't flag the override. **Setup → Display** in the menu creates a monitor file listing your outputs.
+To replace one of ultron's keys, bind the same key again in your file: write `bindsym --no-warn $mod+…` so sway doesn't flag the override. Super+K lists your keys too, marked "yours", in place of the ones they replace. **Setup → Display** in the menu creates a monitor file listing your outputs.
 
 The workspace names are `1:boss 2:review 3:web 4:watch 5:code 6:term 7:chat 8 9:browse 10:sys`. Workspaces 2, 3 and 4 are where agents open things for you; keep them free.
 

@@ -32,7 +32,7 @@ Not enough space? Add `--exclude /Downloads/` (any path relative to your home) a
 
 ## 3. Make the USB stick
 
-Download the Arch ISO from <https://archlinux.org/download/> and write it to a stick of at least 2 GB (it will be erased), for example with `caligula burn archlinux-*.iso` or any USB writer.
+Download `ultron-<version>-x86_64.iso` from the [latest release](https://github.com/zhivko-kocev/ultron/releases/latest) and write it to a stick of at least 2 GB (it will be erased), for example with `caligula burn ultron-*.iso` or any USB writer. A stock Arch ISO from <https://archlinux.org/download/> works too.
 
 ## 4. Firmware
 
@@ -40,19 +40,16 @@ See [bios.md](bios.md): UEFI mode, Secure Boot off. Boot the stick from the entr
 
 ## 5. Install
 
-In the live ISO (plug in a network cable, or run `iwctl` for Wi-Fi):
+The ultron ISO starts the installer by itself. Stop it with Ctrl+C at its first question, then start it again naming your backup partition (on a stock Arch ISO, use the second line):
 
+    ULTRON_KEEP=backup bash /root/bootstrap.sh
     ULTRON_KEEP=backup bash <(curl -fsSL https://raw.githubusercontent.com/zhivko-kocev/ultron/main/bootstrap.sh)
 
-`ULTRON_KEEP` names the label (or UUID) of your backup partition: the disk holding it is never offered for wiping. Answer the questions, check the disk shown is the right one, type `wipe`. Use the **same user name** as on the old system if you want paths inside your files to keep working. Remove the stick and reboot.
+`ULTRON_KEEP` names the label (or UUID) of your backup partition: the disk holding it is never offered for wiping. Without a cable the installer lists the Wi-Fi networks; pick yours and type its password (the new system keeps it). Answer the questions, check the disk shown is the right one, type `wipe`. Use the **same user name** as on the old system if you want paths inside your files to keep working. Remove the stick and reboot.
 
 ## 6. Install ultron
 
-Type the disk password, log in, and run:
-
-    ~/Projects/ultron/bin/ultron install
-
-Reboot. The desktop starts by itself.
+Type the disk password. The first boot logs you in and continues the install by itself (it asks for your password once), then reboots into the desktop. If it stops, it names the step that failed; fix that and run `ultron install --first-boot`.
 
 ## 7. Restore
 

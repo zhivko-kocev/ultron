@@ -9,4 +9,5 @@ if [[ $# -eq 0 && -t 0 ]]; then
 fi
 
 # When stdin is a pipe, ollama run reads it and adds it to the prompt; exec keeps that stdin.
-exec ollama run "${ULTRON_ASK_MODEL:-qwen3:4b}" --think=false "$*"
+# --hidethinking, not --think=false: qwen3:4b ignored think=false in testing and printed its reasoning as the answer.
+exec ollama run "${ULTRON_ASK_MODEL:-qwen3:4b}" --hidethinking "$*"

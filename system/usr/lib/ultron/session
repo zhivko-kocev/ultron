@@ -19,4 +19,6 @@ if [[ -x $generator ]]; then
 fi
 
 mkdir -p "$XDG_RUNTIME_DIR/ultron"
+# greetd starts sessions in /; everything sway execs (the boss, terminals) inherits this folder.
+cd "$HOME"
 exec systemd-cat --identifier=sway sway

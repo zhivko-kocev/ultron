@@ -240,9 +240,12 @@ cmd_shot() {
   say "Saved $file"
 }
 
+# cmd_ssh: ssh into the VM; uses $STATE/id_vm when it exists, user $ULTRON_VM_USER (default zhivko-kocev).
 cmd_ssh() {
-  exec ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-    zhivko-kocev@127.0.0.1 "$@"
+  local key=()
+  [[ -f $STATE/id_vm ]] && key=(-i "$STATE/id_vm")
+  exec ssh -p "$SSH_PORT" "${key[@]}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    "${ULTRON_VM_USER:-zhivko-kocev}@127.0.0.1" "$@"
 }
 
 cmd_destroy() {

@@ -143,8 +143,8 @@ desktop_notify() { notify-send -a ultron "$@" 2>/dev/null || true; }
 sudo_keepalive() {
   sudo -v || die "sudo failed"
   (while kill -0 "$$" 2>/dev/null; do
-    sudo -n -v 2>/dev/null || exit
-    sleep 50
+    sudo -n -v 2>/dev/null || true
+    sleep 30
   done) &
   _ULTRON_SUDO_PID=$!
   trap 'kill "$_ULTRON_SUDO_PID" 2>/dev/null || true' EXIT

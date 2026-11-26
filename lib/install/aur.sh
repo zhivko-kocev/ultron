@@ -7,7 +7,9 @@ step_aur() {
     local tmp
     tmp=$(mktemp -d)
     git clone https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin" || die "Couldn't clone yay-bin from the AUR."
-    (cd "$tmp/yay-bin" && makepkg -si --noconfirm) || {
+    # makepkg -i installs through `sudo -k pacman`, which always asks for the password again; so build only
+    # (yay-bin needs nothing beyond base-devel and git) and install with the sudo session ultron already holds.
+    (cd "$tmp/yay-bin" && makepkg --noconfirm && sudo pacman -U --noconfirm ./yay-bin-*.pkg.tar.*) || {
       rm -rf "$tmp"
       die "Building yay failed: read the error above, then rerun: ultron install aur"
     }

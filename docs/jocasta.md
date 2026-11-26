@@ -52,7 +52,7 @@ If Jocasta doesn't run, set `BOSS=omp` in `~/.config/ultron/ultron.conf`, close 
 2. **Triage:** ask the boss "triage my Jocasta notes". It groups the notes and the open review items into issue drafts and shows them to you in one form.
 3. **File:** the ones you pick become `gh issue create` issues on `zhivko-kocev/jocasta`, each linking its record, as Jocasta's rules require.
 4. **Build:** each issue becomes a Jocasta thread in project `jocasta`, following its AGENTS.md: grill, record, build, `mise run check`, review, then Finish as a merge or a PR according to the repo's `push:` setting.
-5. **Ship to yourself:** `ultron update` rebuilds and reinstalls Jocasta from `main`. Then quit Jocasta (Ctrl+B, Alt+Q) and press Super+B.
+5. **Ship to yourself:** quit Jocasta (Ctrl+B, Alt+Q), run `ultron update` in a terminal (it rebuilds and reinstalls Jocasta from `main`), then press Super+B. While Jocasta runs, `ultron update` and `ultron install jocasta` leave it alone: reinstalling under a running Jocasta breaks it (review item R10).
 
 ## Before the first push from Linux
 

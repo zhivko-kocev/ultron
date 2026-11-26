@@ -46,7 +46,7 @@ Moving from an existing system: [docs/migrate.md](docs/migrate.md).
 
 ## Everyday
 
-- `ultron update`: pulls this repo, reapplies the install, updates packages (with snapshots before and after), mise tools and Jocasta, then runs `doctor`.
+- `ultron update`: pulls this repo, reapplies the install, updates packages (with snapshots before and after), mise tools and Jocasta (only while Jocasta is closed), then runs `doctor`.
 - `ultron doctor [--deep]`: checks the whole setup and prints PASS, WARN or FAIL per item.
 
 ## Testing in a VM

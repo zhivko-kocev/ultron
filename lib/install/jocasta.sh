@@ -63,6 +63,9 @@ _jocasta_pin_omp() {
 }
 
 step_jocasta() {
+  # Installing under a running Jocasta breaks the running copy (review item R10).
+  ! jocasta_running || die "Jocasta is running. Close it first (Ctrl+B, Alt+Q), then rerun: ultron install jocasta"
+
   # 1. Source checkout.
   if [[ ! -d "$JOCASTA_DIR/.git" ]]; then
     say "Cloning $JOCASTA_REPO_URL to ~/Projects/jocasta"

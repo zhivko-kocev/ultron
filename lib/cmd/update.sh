@@ -32,7 +32,10 @@ cmd_update() {
   mise upgrade || warn "mise upgrade failed (see above)"
 
   # 5. Jocasta from main.
-  if [[ -d "$JOCASTA_DIR/.git" ]]; then
+  # Reinstalling under a running Jocasta breaks it (review item R10), so it waits until Jocasta is closed.
+  if [[ -d "$JOCASTA_DIR/.git" ]] && jocasta_running; then
+    warn "Jocasta is running, so it wasn't updated. Close it (Ctrl+B, Alt+Q), run ultron update again from a terminal, then press Super+B."
+  elif [[ -d "$JOCASTA_DIR/.git" ]]; then
     if [[ "$(git -C "$JOCASTA_DIR" branch --show-current)" == main && -z "$(git -C "$JOCASTA_DIR" status --porcelain)" ]]; then
       local before after
       before=$(git -C "$JOCASTA_DIR" rev-parse HEAD)

@@ -187,8 +187,27 @@ write_configs() {
 
 # ---- 5. install -------------------------------------------------------------------
 
+# release_disk: undo what an earlier, failed run left behind (mounts under /mnt, open LUKS on DISK),
+# or archinstall can't wipe the disk.
+release_disk() {
+  local dev
+  if mountpoint -q /mnt; then
+    say "Unmounting /mnt left by an earlier run"
+    umount -R /mnt || die "Couldn't unmount /mnt. Reboot the USB stick and run this again."
+  fi
+  while IFS= read -r dev; do
+    [[ -n "$dev" ]] || continue
+    say "Closing $dev left open by an earlier run"
+    cryptsetup close "$dev" || die "Couldn't close $dev. Reboot the USB stick and run this again."
+  done < <(lsblk -nrpo NAME,TYPE "$DISK" | awk '$2 == "crypt" { print $1 }')
+}
+
 run_archinstall() {
+  release_disk
   say "Installing Arch with archinstall (this takes a while)"
+  # kb_layout is empty in the template: archinstall would otherwise boot the new system in a container to
+  # run localectl, which failed in testing ("Failed to connect to system scope bus via machine transport").
+  # The console keymap is written by finish() instead.
   if ! archinstall --config "$CONFIG" --creds "$CREDS" --silent; then
     shred -u "$CREDS" 2>/dev/null || rm -f "$CREDS"
     cat >&2 <<EOF
@@ -221,6 +240,7 @@ finish() {
     arch-chroot /mnt runuser -u "$USER_NAME" -- git clone "$REPO_URL" "/home/$USER_NAME/Projects/ultron" ||
       echo "warn: the clone failed; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
     printf 'Next: run ~/Projects/ultron/bin/ultron install\n' >/mnt/etc/motd
+    printf 'KEYMAP=us\nFONT=default8x16\n' >/mnt/etc/vconsole.conf
   fi
   echo
   say "Done. Remove the USB stick, reboot, type the disk password, log in, run the motd command."

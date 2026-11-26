@@ -86,8 +86,12 @@ if [[ -e $rundir/away ]] || pgrep -x swaylock >/dev/null 2>&1; then
   fi
 fi
 
-notify-send -u critical -a ultron "Root access requested" "$command"$'\n'"in $folder" 2>/dev/null || true
+note_id=$(notify-send -p -u critical -a ultron "Root access requested" "$command"$'\n'"in $folder" 2>/dev/null || true)
 
 # fuzzel prints the typed password on stdout; its exit status (or timeout's) becomes ours.
-exec timeout 600 fuzzel --dmenu --password --lines 0 --prompt "sudo ▸ " \
-  --mesg "Run as root: $command" </dev/null
+# The critical notification never times out on its own, so it is dismissed once the popup closes.
+rc=0
+timeout 600 fuzzel --dmenu --password --lines 0 --prompt "sudo ▸ " \
+  --mesg "Run as root: $command" </dev/null || rc=$?
+[[ -n $note_id ]] && makoctl dismiss -n "$note_id" >/dev/null 2>&1
+exit "$rc"

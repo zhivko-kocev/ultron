@@ -104,9 +104,14 @@ cmd_pkg() {
     [[ "$n" =~ ^[A-Za-z0-9@._+][A-Za-z0-9@._+-]*$ ]] || die "'$n' isn't a package name"
   done
 
+  # Without a terminal (an agent, a script) nobody can answer yay's questions; the root step still
+  # asks through sudo (an agent's sudo is ultron's popup, which shows the pacman command).
+  local quiet=()
+  if [[ ! -t 0 ]]; then quiet=(--noconfirm --answerdiff None --answerclean None); fi
+
   if [[ $sub == install ]]; then
     say "Installing: ${names[*]}"
-    if yay -S --needed "${names[@]}"; then
+    if yay -S --needed "${quiet[@]}" "${names[@]}"; then
       ok "Installed: ${names[*]}"
       _pkg_remember "${names[@]}"
     else
@@ -116,7 +121,7 @@ cmd_pkg() {
   else
     _pkg_core_warn "${names[@]}"
     say "Removing: ${names[*]} (and dependencies nothing else needs)"
-    if yay -Rns "${names[@]}"; then
+    if yay -Rns "${quiet[@]}" "${names[@]}"; then
       ok "Removed: ${names[*]}"
       _pkg_forget "${names[@]}"
     else

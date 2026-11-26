@@ -21,7 +21,8 @@ step_aur() {
     die "An AUR build failed: rerun ultron install aur (see docs/migrate.md for the Limine tools and docker-rootless-extras contingencies)."
   if ((${#rest[@]} < ${#pkgs[@]})); then
     # Its openssl-sys only builds against OpenSSL 1.1/3.x; Arch's openssl is 4.x, openssl-3 sits beside it.
-    PKG_CONFIG_PATH=/usr/lib/openssl-3/pkgconfig yay -S "${yayopts[@]}" stremio-service ||
+    # Its test build (check()) doesn't compile at 0.1.22, so the tests are skipped (--nocheck).
+    PKG_CONFIG_PATH=/usr/lib/openssl-3/pkgconfig yay -S "${yayopts[@]}" --mflags --nocheck stremio-service ||
       die "Building stremio-service failed: rerun ultron install aur."
   fi
 }

@@ -43,7 +43,9 @@ toml_tool_keys() {
 
 # omp_pin: the oh-my-pi version pinned in the system mise conf (empty when none).
 omp_pin() {
-  sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" 2>/dev/null | head -n1
+  # First install: the file isn't there yet (sed would fail the pipeline).
+  [[ -r "$ULTRON_TOOLS_CONF" ]] || return 0
+  sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" | head -n1
 }
 
 # jocasta_omp_want: the omp version Jocasta's README says it was checked against (empty when none).

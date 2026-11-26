@@ -7,7 +7,7 @@ Super+Space — App launcher (fuzzel)
 Super+Alt+Space — ultron menu: install apps and tools, settings, theme, update, and more
 Super+Escape — Power menu: lock, suspend, log out, reboot, reboot to BIOS, shut down
 Super+K — This key cheat sheet
-Super+W — Close window (asks first for the boss window: closing it stops every thread)
+Super+W — Close window (asks first for the boss window: closing it stops its agents)
 Super+Q — Close window (same as Super+W)
 Super+T — Float / tile the window
 Super+F — Fullscreen on / off
@@ -40,11 +40,11 @@ Shift+Print — Full-screen screenshot to file and clipboard
 Volume keys — Volume up / down, mute
 Media keys — Play/pause, next, previous
 Brightness keys — Screen brightness up / down
-Super+B — Boss: jump to workspace 1 with the boss pane selected
+Super+B — Boss: jump to the boss agent on workspace 1
 Super+Backspace — Back to where you were before the last jump
-Super+A — Attention: the boss if it needs you, else the latest urgent window
-Super+N — New thread (Jocasta's own New thread question)
+Super+A — Attention: go to the agent that needs you, else the latest urgent window
+Super+N — New thread (when the boss is Jocasta)
 Super+Shift+S — Region screenshot for the boss: saves it, copies its path, jumps to the boss
 Super+M — Focus mode on / off (no jumps; workspace 1 turns red instead)
-Super+Shift+J — Note a Jocasta friction point
+Super+Shift+J — Note a Jocasta friction point (when the boss is Jocasta)
 Super+Shift+C — Reload the sway config

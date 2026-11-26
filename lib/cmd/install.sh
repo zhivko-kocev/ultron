@@ -34,13 +34,20 @@ omp_pin() {
   sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" 2>/dev/null | head -n1
 }
 
-# set_commit_role: point omp's commit role at the local model first.
+# set_commit_role: point omp's commit role at the local model first. modelRoles is one record setting
+# (`modelRoles.commit` isn't a key), so the current record is read, merged and written back.
 set_commit_role() {
-  if have omp; then
-    omp config set modelRoles.commit "$OMP_COMMIT_ROLE" || warn "couldn't set omp's commit role"
-  else
+  if ! have omp; then
     warn "omp isn't installed yet, so its commit role wasn't set"
+    return 0
   fi
+  local roles
+  roles=$(omp config get modelRoles 2>/dev/null) || roles='{}'
+  roles=$(jq -c --arg v "$OMP_COMMIT_ROLE" '(. // {}) + {commit: $v}' <<<"$roles" 2>/dev/null) || {
+    warn "omp's modelRoles isn't JSON, so the commit role wasn't set"
+    return 0
+  }
+  omp config set modelRoles "$roles" >/dev/null || warn "couldn't set omp's commit role"
 }
 
 _valid_step() {

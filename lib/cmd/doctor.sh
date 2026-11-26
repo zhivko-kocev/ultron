@@ -116,7 +116,7 @@ _check_ai() {
     _fail "qwen3:4b is pulled (ultron install ai)"
   fi
   local role
-  role=$(omp config get modelRoles.commit 2>/dev/null | head -n1 | tr -d "\"'[:space:]" || true)
+  role=$(omp config get modelRoles 2>/dev/null | jq -r '.commit // ""' 2>/dev/null || true)
   if [[ "$role" == ollama/* ]]; then
     _pass "omp commit role starts with ollama/"
   else

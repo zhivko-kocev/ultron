@@ -46,7 +46,7 @@ Then close the old boss window (Super+W on workspace 1, confirm) and press Super
 
 If Jocasta doesn't run, set `BOSS=omp` in `~/.config/ultron/ultron.conf`, close the boss window and press Super+B. The boss is then a plain omp session with the same keys; the bar shows `boss: omp`. `ultron install jocasta` switches back.
 
-## Known Linux blocker: Shift in foot (review item R12)
+## Known Linux blocker: Shift in foot (review item R12, [jocasta#1](https://github.com/zhivko-kocev/jocasta/issues/1))
 
 Jocasta's `main` (as of `cd111f6`) loses Shift on typed characters in foot: "Hello!" arrives as "hello1". The fix is one flag (`REPORT_ALTERNATE_KEYS` in `src/frontier/shell/app.rs`), tested in the VM. Until it is on `main`:
 

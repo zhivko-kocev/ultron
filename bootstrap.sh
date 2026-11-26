@@ -161,6 +161,10 @@ write_configs() {
   root_size=$((floored - ROOT_START - TAIL_GAP))
   ((root_size >= 20 * 1024 * mib)) || die "$DISK is too small (needs at least 23 GiB)."
 
+  # umask 077 only while the config files are written: archinstall inherits the umask, and under 077
+  # the new system got a 0700 /etc (logins failed with "/etc/profile: Permission denied").
+  local old_umask
+  old_umask=$(umask)
   umask 077
   mkdir -p "$WORK"
   # @ROOT_SIZE@ is a bare number in the template: quote it so the template parses as JSON,
@@ -182,6 +186,7 @@ write_configs() {
      users: [{username: $user, "!password": $user_pw, sudo: true, groups: []}]}' >"$CREDS"
   chmod 600 "$CREDS"
   DISK_PW="" USER_PW=""
+  umask "$old_umask"
   echo "Disk: $DISK, root partition: $((root_size / mib)) MiB (encrypted btrfs), ESP: 2 GiB."
 }
 
@@ -237,7 +242,7 @@ finish() {
     echo "warn: nothing is mounted at /mnt; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
   else
     say "Cloning ultron into the new system"
-    # runuser keeps root's HOME, and git then fails reading /root/.gitconfig: give it the user's.
+    # runuser keeps root's HOME (mode 0700), whose git config the user can't read: give git the user's HOME.
     arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="/home/$USER_NAME" \
       git clone "$REPO_URL" "/home/$USER_NAME/Projects/ultron" ||
       echo "warn: the clone failed; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2

@@ -108,7 +108,8 @@ _system_firewall() {
     sudo ufw allow "$tok" >/dev/null
   done
   sudo ufw --force enable >/dev/null
-  sudo systemctl enable ufw
+  # --now: `ufw enable` loads the rules but leaves ufw.service inactive until the next boot.
+  sudo systemctl enable --now ufw
 }
 
 _system_subids() {

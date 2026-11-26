@@ -96,7 +96,11 @@ step_boot() {
   sudo systemctl disable --now snapper-timeline.timer 2>/dev/null || true
   sudo systemctl enable --now snapper-cleanup.timer limine-snapper-sync.service
 
-  # 9. First snapshot.
-  say "Taking the first snapshot"
-  sudo snapper -c root create -d "ultron install" -c number
+  # 9. First snapshot, once: `ultron update` reruns this step, and repeats would push real snapshots out of the 5 kept.
+  if sudo snapper -c root list --columns description 2>/dev/null | grep -qx '[[:space:]]*ultron install[[:space:]]*'; then
+    ok "The \"ultron install\" snapshot exists"
+  else
+    say "Taking the first snapshot"
+    sudo snapper -c root create -d "ultron install" -c number
+  fi
 }

@@ -1,16 +1,13 @@
 # shellcheck shell=bash
-# ultron close: close the focused window; asks first for the boss (closing it stops every thread).
+# ultron close: close the focused window; asks first for the boss (closing it stops its agents).
 
 cmd_close() {
-  if [[ $(focused_app_id) == ultron-boss ]] && { [[ $(boss_kind) != jocasta ]] || jocasta_running; }; then
-    _confirm "Close the boss? It stops every thread (they resume next time)" || return 0
+  # The window is fixed before asking: a jump may move focus while the question is open.
+  local id
+  id=$(swaymsg -t get_tree | jq -r '[.. | objects | select(.focused == true)] | .[0].id // empty')
+  [[ -n "$id" ]] || return 0
+  if [[ $(focused_app_id) == ultron-boss ]]; then
+    confirm "Close the boss? Its agents stop (they resume next time)" || return 0
   fi
-  swaymsg kill >/dev/null
-}
-
-# _confirm MESSAGE: fuzzel No/Yes; 0 only for Yes.
-_confirm() {
-  local ans
-  ans=$(printf 'No\nYes\n' | fuzzel --dmenu --lines 2 --prompt "▸ " --mesg "$1") || return 1
-  [[ $ans == Yes ]]
+  swaymsg "[con_id=$id] kill" >/dev/null
 }

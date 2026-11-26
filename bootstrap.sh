@@ -2,28 +2,45 @@
 # ultron bootstrap: runs as root in the Arch live ISO (UEFI) and installs the base system with archinstall.
 #   bash <(curl -fsSL https://raw.githubusercontent.com/zhivko-kocev/ultron/main/bootstrap.sh)
 # Standalone on purpose: the ISO has no checkout, so lib/common.sh is not available here.
+#
+# Every answer can come from the environment (a set variable skips its question):
+#   ULTRON_USER       your login name (asked when unset)
+#   ULTRON_HOSTNAME   computer name (default ultron)
+#   ULTRON_TIMEZONE   e.g. Europe/Berlin (default: detected from your IP address, else UTC)
+#   ULTRON_KEYBOARD   XKB layout(s), e.g. us or de,us (default us); the console uses the first one
+#   ULTRON_DOTFILES   optional dotfiles repo: owner/repo (GitHub) or a git URL
+#   ULTRON_DISK       disk to erase, e.g. /dev/nvme0n1
+#   ULTRON_KEEP       comma-separated partition labels or UUIDs: disks holding one are never offered
+#   ULTRON_REPO       ultron repo to clone (default https://github.com/zhivko-kocev/ultron)
+#   ULTRON_REF        branch or tag of it (default main)
+#   ULTRON_TMPL_URL   where to fetch install/archinstall.json.tmpl (default: from ULTRON_REPO at ULTRON_REF)
+# With all of them set, stdin is read for exactly: wipe, the disk password twice, the same-password answer
+# (then the user password twice when that answer is n).
 set -euo pipefail
 
-REPO_URL="https://github.com/zhivko-kocev/ultron"
-TMPL_URL="https://raw.githubusercontent.com/zhivko-kocev/ultron/main/install/archinstall.json.tmpl"
-USER_NAME="zhivko-kocev"
-HOST_NAME="ultron"
-TIME_ZONE="Europe/Skopje"
-SSD_UUID="f4d0a7a7-ee8c-458c-91aa-3f2dceacb527"
-SSD_LABEL="projects"
+REPO_URL=${ULTRON_REPO:-https://github.com/zhivko-kocev/ultron}
+REPO_REF=${ULTRON_REF:-main}
 WORK=/tmp/ultron
 CONFIG="$WORK/user_configuration.json"
 CREDS="$WORK/user_credentials.json"
 INSTALL_LOG=/var/log/archinstall/install.log
 # ESP: start 1 MiB, size 2 GiB (fixed in install/archinstall.json.tmpl).
-ROOT_START=2148532224        # 2 GiB + 1 MiB
-TAIL_GAP=1048576             # leave 1 MiB free at the end
+ROOT_START=2148532224 # 2 GiB + 1 MiB
+TAIL_GAP=1048576      # leave 1 MiB free at the end
 
 say() { printf '\e[1;33m==>\e[0m %s\n' "$*"; }
+warn() { printf '\e[1;35mwarn\e[0m %s\n' "$*" >&2; }
 die() {
   printf '\e[1;31merror\e[0m %s\n' "$*" >&2
   exit 1
 }
+
+# The credentials file holds both passwords: it never outlives this script, however it ends.
+cleanup() {
+  if [[ -e "$CREDS" ]]; then shred -u "$CREDS" 2>/dev/null || rm -f "$CREDS"; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
 
 # ---- 1. checks ----------------------------------------------------------------
 
@@ -31,9 +48,9 @@ checks() {
   say "Checking the live environment"
   [[ $EUID -eq 0 ]] || die "Run this as root (the Arch live ISO logs you in as root)."
   [[ -d /sys/firmware/efi/efivars ]] ||
-    die "You started the USB in legacy mode: reboot, press F12, pick the entry that starts with UEFI:"
+    die "The USB stick started in legacy (BIOS) mode: reboot, open the boot menu and pick the entry that starts with UEFI:"
   curl -fsI https://archlinux.org >/dev/null 2>&1 ||
-    die "No internet. Plug in the network cable (or run iwctl for Wi-Fi), then run this again."
+    die "No internet. Plug in a network cable, or join Wi-Fi with: iwctl station wlan0 connect <network>. Then run this again."
   local ver
   ver=$(archinstall --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)*' | head -n1 || true)
   [[ "$ver" == 4.* ]] ||
@@ -44,7 +61,108 @@ checks() {
   fi
 }
 
-# ---- 2. disk ------------------------------------------------------------------
+# ---- 2. settings ----------------------------------------------------------------
+
+USER_NAME="" HOST_NAME="" TIME_ZONE="" KEYBOARD="" CONSOLE_KEYMAP="" DOTFILES_URL=""
+
+# ask VAR PROMPT DEFAULT: one line from the user into VAR (DEFAULT on Enter).
+ask() {
+  local -n _ans=$1
+  local reply
+  read -rp "$2${3:+ [$3]}: " reply
+  _ans=${reply:-$3}
+}
+
+valid_user() { [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$1" != root ]]; }
+valid_host() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; }
+valid_tz() { [[ "$1" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ && -f "/usr/share/zoneinfo/$1" ]]; }
+valid_kb() { [[ "$1" =~ ^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$ ]]; }
+
+detect_timezone() {
+  local tz
+  tz=$(curl -fsS --max-time 5 https://ipapi.co/timezone 2>/dev/null || true)
+  if valid_tz "$tz"; then printf '%s\n' "$tz"; else printf 'UTC\n'; fi
+}
+
+# console_keymap LAYOUTS: the console keymap for the first XKB layout ("us" when kbd has none).
+console_keymap() {
+  local km=${1%%,*}
+  [[ "$km" != gb ]] || km=uk
+  if [[ -n "$(find /usr/share/kbd/keymaps -name "$km.map*" -print -quit 2>/dev/null)" ]]; then
+    printf '%s\n' "$km"
+  else
+    printf 'us\n'
+  fi
+}
+
+settings() {
+  say "Settings (set ULTRON_* variables to skip these questions)"
+  if [[ -n "${ULTRON_USER:-}" ]]; then
+    USER_NAME=$ULTRON_USER
+    valid_user "$USER_NAME" || die "ULTRON_USER '$USER_NAME' isn't a valid login name (lowercase letters, digits, _ and -, starting with a letter or _)."
+  else
+    while true; do
+      ask USER_NAME "Your login name (lowercase, e.g. alex)" ""
+      valid_user "$USER_NAME" && break
+      echo "Use lowercase letters, digits, _ and -, starting with a letter or _ (at most 32 characters, not root)."
+    done
+  fi
+
+  if [[ -n "${ULTRON_HOSTNAME:-}" ]]; then
+    HOST_NAME=$ULTRON_HOSTNAME
+    valid_host "$HOST_NAME" || die "ULTRON_HOSTNAME '$HOST_NAME' isn't a valid computer name (letters, digits and -, at most 63)."
+  else
+    while true; do
+      ask HOST_NAME "Computer name" ultron
+      valid_host "$HOST_NAME" && break
+      echo "Use letters, digits and - (not at the start or end), at most 63 characters."
+    done
+  fi
+
+  if [[ -n "${ULTRON_TIMEZONE:-}" ]]; then
+    TIME_ZONE=$ULTRON_TIMEZONE
+    valid_tz "$TIME_ZONE" || die "ULTRON_TIMEZONE '$TIME_ZONE' isn't a time zone (see ls /usr/share/zoneinfo), e.g. Europe/Berlin."
+  else
+    local detected
+    detected=$(detect_timezone)
+    while true; do
+      ask TIME_ZONE "Time zone" "$detected"
+      valid_tz "$TIME_ZONE" && break
+      echo "Not a time zone. Examples: Europe/Berlin, America/New_York, Asia/Tokyo, UTC."
+    done
+  fi
+
+  if [[ -n "${ULTRON_KEYBOARD:-}" ]]; then
+    KEYBOARD=$ULTRON_KEYBOARD
+    valid_kb "$KEYBOARD" || die "ULTRON_KEYBOARD '$KEYBOARD' isn't an XKB layout list, e.g. us or de,us."
+  else
+    while true; do
+      ask KEYBOARD "Keyboard layout (XKB, e.g. us, de, fr, gb; several: de,us)" us
+      valid_kb "$KEYBOARD" && break
+      echo "Use XKB layout names separated by commas, e.g. us or de,us."
+    done
+  fi
+  CONSOLE_KEYMAP=$(console_keymap "$KEYBOARD")
+  if [[ "$CONSOLE_KEYMAP" == us && "${KEYBOARD%%,*}" != us ]]; then
+    warn "The console has no '${KEYBOARD%%,*}' keymap: the disk password prompt uses us (the desktop still uses $KEYBOARD)."
+  fi
+  # Now, before any password is typed: the disk password must be typed with the same layout here and at boot.
+  loadkeys "$CONSOLE_KEYMAP" 2>/dev/null || warn "loadkeys $CONSOLE_KEYMAP failed: this console keeps its current layout."
+
+  local dots=${ULTRON_DOTFILES-}
+  if [[ -z "${ULTRON_DOTFILES+set}" ]]; then
+    ask dots "Dotfiles repo (owner/repo on GitHub or a git URL; Enter for none)" ""
+  fi
+  if [[ "$dots" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    DOTFILES_URL="https://github.com/$dots"
+  else
+    DOTFILES_URL=$dots
+  fi
+
+  echo "  user $USER_NAME, computer $HOST_NAME, time zone $TIME_ZONE, keyboard $KEYBOARD (console: $CONSOLE_KEYMAP)${DOTFILES_URL:+, dotfiles $DOTFILES_URL}"
+}
+
+# ---- 3. disk ------------------------------------------------------------------
 
 DISK="" DISK_BYTES=0
 
@@ -57,56 +175,86 @@ live_disk() {
   if [[ -n "$pk" ]]; then printf '/dev/%s\n' "$pk"; else printf '%s\n' "$src"; fi
 }
 
-# True when the disk holds the projects SSD partition (by UUID or label).
-holds_projects() {
-  lsblk -nPo UUID,LABEL "$1" 2>/dev/null | grep -qE "UUID=\"$SSD_UUID\"|LABEL=\"$SSD_LABEL\""
+# keeps DISK: true when the disk holds a partition named in ULTRON_KEEP (label or UUID).
+keeps() {
+  local ids want
+  [[ -n "${ULTRON_KEEP:-}" ]] || return 1
+  ids=$(lsblk -J -o UUID,LABEL,PARTUUID,PARTLABEL "$1" 2>/dev/null |
+    jq -r '.. | objects | (.uuid, .label, .partuuid, .partlabel) | select(. != null and . != "")' || true)
+  local wants=()
+  IFS=, read -ra wants <<<"$ULTRON_KEEP"
+  for want in "${wants[@]}"; do
+    [[ -n "$want" ]] || continue
+    if grep -qixF -- "$want" <<<"$ids"; then return 0; fi
+  done
+  return 1
+}
+
+# parts_summary DISK: its partitions as "fstype "label" size, ..." so people recognise their disks.
+parts_summary() {
+  lsblk -J -o TYPE,FSTYPE,LABEL,SIZE "$1" 2>/dev/null | jq -r '
+    [.blockdevices[0].children[]? |
+      (.fstype // "unformatted") + (if .label then " \"" + .label + "\"" else "" end) + " " + .size] |
+    if length == 0 then "no partitions" else join(", ") end' || echo "partitions unknown"
 }
 
 pick_disk() {
   say "Finding the disk to install on"
-  local live names=() sizes=() models=() trans=() bytes=() name size model tran type b
+  local live names=() sizes=() models=() trans=() bytes=() parts=() hidden=() name size model tran type b
   live=$(live_disk)
   # Fields are joined with US (0x1f), not tabs, so empty MODEL/TRAN fields don't collapse.
   while IFS=$'\x1f' read -r name b model tran type; do
     [[ "$type" == disk ]] || continue
-    [[ "$name" == /dev/loop* || "$name" == /dev/zram* || "$name" == /dev/sr* ]] && continue
-    [[ -n "$live" && "$name" == "$live" ]] && continue
-    holds_projects "$name" && continue
+    case $name in /dev/loop* | /dev/zram* | /dev/sr*) continue ;; esac
+    if [[ -n "$live" && "$name" == "$live" ]]; then
+      hidden+=("$name (the USB stick this runs from)")
+      continue
+    fi
+    if keeps "$name"; then
+      hidden+=("$name (holds a partition in ULTRON_KEEP)")
+      continue
+    fi
     size=$(numfmt --to=iec --suffix=B "$b")
     names+=("$name") sizes+=("$size") models+=("${model:--}") trans+=("${tran:--}") bytes+=("$b")
+    parts+=("$(parts_summary "$name")")
   done < <(lsblk -J -dpb -o NAME,SIZE,MODEL,TRAN,TYPE |
     jq -r '.blockdevices[] | [.name, (.size | tostring), (.model // "" | gsub("^\\s+|\\s+$"; "")), (.tran // ""), .type] | join("\u001f")')
 
-  ((${#names[@]} > 0)) || die "No disk to install on was found (the USB stick and the projects SSD are never offered)."
+  local h
+  for h in "${hidden[@]}"; do echo "  not offered: $h"; done
+  ((${#names[@]} > 0)) || die "No disk to install on was found (the USB stick and ULTRON_KEEP disks are never offered)."
 
-  local def="" i
-  for i in "${!names[@]}"; do
-    if systemd-detect-virt -q --vm; then
-      [[ "${names[$i]}" == /dev/vda ]] && def=$((i + 1))
-    elif [[ "${models[$i]^^}" == *KIOXIA* ]]; then
-      def=$((i + 1))
-    fi
-  done
-
-  echo "Disks that can be erased:"
-  for i in "${!names[@]}"; do
-    printf '  %d) %-14s %8s  %s  (%s)\n' "$((i + 1))" "${names[$i]}" "${sizes[$i]}" "${models[$i]}" "${trans[$i]}"
-  done
-  local choice
-  read -rp "Install on which disk? [${def:-pick a number}] " choice
-  choice=${choice:-$def}
-  { [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#names[@]})); } || die "No disk picked: nothing was changed."
-  i=$((choice - 1))
+  local i=-1 j
+  if [[ -n "${ULTRON_DISK:-}" ]]; then
+    local want
+    want=$(readlink -f "$ULTRON_DISK" 2>/dev/null || printf '%s' "$ULTRON_DISK")
+    for j in "${!names[@]}"; do
+      if [[ "${names[$j]}" == "$want" ]]; then i=$j; fi
+    done
+    ((i >= 0)) || die "ULTRON_DISK=$ULTRON_DISK isn't one of the disks that can be erased: ${names[*]}"
+  else
+    echo "Disks that can be erased:"
+    for j in "${!names[@]}"; do
+      printf '  %d) %-14s %8s  %s  (%s)\n       %s\n' "$((j + 1))" "${names[$j]}" "${sizes[$j]}" "${models[$j]}" "${trans[$j]}" "${parts[$j]}"
+    done
+    local def="" choice
+    if ((${#names[@]} == 1)); then def=1; fi
+    read -rp "Install on which disk? [${def:-pick a number}] " choice
+    choice=${choice:-$def}
+    { [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#names[@]})); } || die "No disk picked: nothing was changed."
+    i=$((choice - 1))
+  fi
   DISK=${names[$i]} DISK_BYTES=${bytes[$i]}
 
   echo
-  echo "EVERYTHING on ${DISK} (${models[$i]}, ${sizes[$i]}) will be erased."
+  echo "EVERYTHING on ${DISK} (${models[$i]}, ${sizes[$i]}) will be erased:"
+  echo "  ${parts[$i]}"
   local answer
   read -rp "Type wipe to continue: " answer
   [[ "$answer" == wipe ]] || die "You didn't type wipe: nothing was changed."
 }
 
-# ---- 3. passwords ---------------------------------------------------------------
+# ---- 4. passwords ---------------------------------------------------------------
 
 DISK_PW="" USER_PW=""
 
@@ -115,9 +263,9 @@ ask_twice() {
   local -n _out=$1
   local a b
   while true; do
-    read -rsp "$2: " a
+    IFS= read -rsp "$2: " a
     echo
-    read -rsp "$2 again: " b
+    IFS= read -rsp "$2 again: " b
     echo
     if [[ -z "$a" ]]; then
       echo "The password can't be empty."
@@ -131,7 +279,7 @@ ask_twice() {
 }
 
 passwords() {
-  say "Passwords"
+  say "Passwords (keyboard layout: $CONSOLE_KEYMAP)"
   ask_twice DISK_PW "Disk password (typed at every power-on)"
   local same
   read -rp "Use the same password for your user ($USER_NAME)? [Y/n] " same
@@ -142,16 +290,23 @@ passwords() {
   fi
 }
 
-# ---- 4. config files --------------------------------------------------------------
+# ---- 5. config files --------------------------------------------------------------
 
 template() {
-  local here
+  local here raw
+  if [[ -n "${ULTRON_TMPL_URL:-}" ]]; then
+    curl -fsSL "$ULTRON_TMPL_URL" || die "Couldn't download $ULTRON_TMPL_URL"
+    return 0
+  fi
   here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
   if [[ -f "$here/install/archinstall.json.tmpl" ]]; then
     cat "$here/install/archinstall.json.tmpl"
-  else
-    curl -fsSL "$TMPL_URL" || die "Couldn't download $TMPL_URL"
+    return 0
   fi
+  [[ "$REPO_URL" =~ ^https://github\.com/([^/]+)/([^/]+)$ ]] ||
+    die "Can't derive the template URL from ULTRON_REPO=$REPO_URL: set ULTRON_TMPL_URL to the raw URL of install/archinstall.json.tmpl."
+  raw="https://raw.githubusercontent.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}/$REPO_REF/install/archinstall.json.tmpl"
+  curl -fsSL "$raw" || die "Couldn't download $raw (check ULTRON_REPO and ULTRON_REF)."
 }
 
 write_configs() {
@@ -181,16 +336,17 @@ write_configs() {
   jq . "$CONFIG" >/dev/null || die "The archinstall configuration isn't valid JSON."
   echo "Config written to $CONFIG."
 
-  jq -n --arg disk_pw "$DISK_PW" --arg user "$USER_NAME" --arg user_pw "$USER_PW" '
-    {encryption_password: $disk_pw,
-     users: [{username: $user, "!password": $user_pw, sudo: true, groups: []}]}' >"$CREDS"
+  # Passwords reach jq through its environment, never its argv (visible in ps).
+  ULTRON_DISK_PW=$DISK_PW ULTRON_USER_PW=$USER_PW jq -n --arg user "$USER_NAME" '
+    {encryption_password: env.ULTRON_DISK_PW,
+     users: [{username: $user, "!password": env.ULTRON_USER_PW, sudo: true, groups: []}]}' >"$CREDS"
   chmod 600 "$CREDS"
   DISK_PW="" USER_PW=""
   umask "$old_umask"
   echo "Disk: $DISK, root partition: $((root_size / mib)) MiB (encrypted btrfs), ESP: 2 GiB."
 }
 
-# ---- 5. install -------------------------------------------------------------------
+# ---- 6. install -------------------------------------------------------------------
 
 # release_disk: undo what an earlier, failed run left behind (mounts under /mnt, open LUKS on DISK),
 # or archinstall can't wipe the disk.
@@ -214,11 +370,11 @@ run_archinstall() {
   # run localectl, which failed in testing ("Failed to connect to system scope bus via machine transport").
   # The console keymap is written by finish() instead.
   if ! archinstall --config "$CONFIG" --creds "$CREDS" --silent; then
-    shred -u "$CREDS" 2>/dev/null || rm -f "$CREDS"
+    cleanup
     cat >&2 <<EOF
 
 archinstall failed. Its log is $INSTALL_LOG.
-If it failed at the bootloader, finish by hand (docs/migrate.md, "archinstall fails at the bootloader"):
+If it failed at the bootloader, finish by hand:
   arch-chroot /mnt
   pacman -S limine
   install -D /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI
@@ -228,33 +384,51 @@ If it failed at the bootloader, finish by hand (docs/migrate.md, "archinstall fa
         path: boot():/vmlinuz-linux
         module_path: boot():/initramfs-linux.img
         cmdline: cryptdevice=PARTUUID=<PARTUUID of the 2nd partition>:root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs quiet
-Then reboot and continue with: ~/Projects/ultron/bin/ultron install
+Then reboot and continue with: git clone --branch $REPO_REF $REPO_URL ~/Projects/ultron && ~/Projects/ultron/bin/ultron install
 EOF
     exit 1
   fi
 }
 
-# ---- 6. after the install -----------------------------------------------------------
+# ---- 7. after the install -----------------------------------------------------------
 
 finish() {
-  shred -u "$CREDS" 2>/dev/null || rm -f "$CREDS"
+  cleanup
+  local home=/home/$USER_NAME clone="git clone --branch $REPO_REF $REPO_URL ~/Projects/ultron"
   if ! mountpoint -q /mnt; then
-    echo "warn: nothing is mounted at /mnt; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
+    warn "nothing is mounted at /mnt; after reboot run: $clone"
   else
-    say "Cloning ultron into the new system"
+    say "Cloning ultron ($REPO_REF) into the new system"
     # runuser keeps root's HOME (mode 0700), whose git config the user can't read: give git the user's HOME.
-    arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="/home/$USER_NAME" \
-      git clone "$REPO_URL" "/home/$USER_NAME/Projects/ultron" ||
-      echo "warn: the clone failed; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
+    arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="$home" \
+      git clone --branch "$REPO_REF" "$REPO_URL" "$home/Projects/ultron" ||
+      warn "the clone failed; after reboot run: $clone"
+
+    say "Writing ~/.config/ultron/ultron.conf"
+    mkdir -p "/mnt$home/.config/ultron"
+    {
+      printf '# Machine settings (ultron conf set KEY VALUE). Written by bootstrap.sh.\n'
+      printf 'KEYBOARD=%s\n' "$KEYBOARD"
+      if [[ -n "$DOTFILES_URL" ]]; then printf 'DOTFILES_REPO=%s\n' "$DOTFILES_URL"; fi
+    } >"/mnt$home/.config/ultron/ultron.conf"
+    arch-chroot /mnt chown -R "$USER_NAME:" "$home/.config" || warn "couldn't give $home/.config to $USER_NAME"
+
     printf 'Next: run ~/Projects/ultron/bin/ultron install\n' >/mnt/etc/motd
-    printf 'KEYMAP=us\nFONT=default8x16\n' >/mnt/etc/vconsole.conf
+    printf 'KEYMAP=%s\nFONT=default8x16\n' "$CONSOLE_KEYMAP" >/mnt/etc/vconsole.conf
+    if [[ "$CONSOLE_KEYMAP" != us ]]; then
+      # The initramfs asks for the disk password; it copies the keymap from vconsole.conf when it's built.
+      say "Rebuilding the initramfs with the $CONSOLE_KEYMAP keymap (for the disk password prompt)"
+      arch-chroot /mnt mkinitcpio -P ||
+        warn "mkinitcpio failed: the disk password prompt may use the us layout until the next kernel update"
+    fi
   fi
   echo
-  say "Done. Remove the USB stick, reboot, type the disk password, log in, run the motd command."
+  say "Done. Remove the USB stick, reboot, type the disk password, log in as $USER_NAME, run the command shown."
 }
 
 main() {
   checks
+  settings
   pick_disk
   passwords
   write_configs

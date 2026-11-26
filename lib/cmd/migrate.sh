@@ -1,8 +1,14 @@
 # shellcheck shell=bash
-# ultron migrate backup [--exclude PATTERN]... : copy home, /etc and Docker volumes to the projects SSD.
-# ultron migrate restore [--dir D] [--dry-run]  : bring that copy back on ultron (docs/migrate.md).
+# ultron migrate backup --to DEST [--exclude PATTERN]... : copy home, /etc and Docker volumes to another disk.
+# ultron migrate restore --from SRC [--dry-run]          : bring that copy back into this home.
+# ultron migrate clean --from SRC                        : delete the copies once you've checked the restore.
+# DEST/SRC is a folder, or a device (LABEL=x, UUID=x, /dev/x) that is mounted for the run when it isn't already.
+
+# shellcheck source=install.sh
+source "$ULTRON_ROOT/lib/cmd/install.sh"
 
 MIGRATE_PREVIEW=/tmp/ultron-restore-preview.txt
+MIGRATE_MNT=/mnt/ultron-migrate
 
 # Static backup excludes (rsync patterns anchored at the home folder).
 MIGRATE_BACKUP_EXCLUDES=(
@@ -11,7 +17,7 @@ MIGRATE_BACKUP_EXCLUDES=(
   "/Downloads/archlinux-*.iso"
 )
 
-# Static restore excludes: Omarchy's desktop, files ultron and dotfiles now own, the two repos.
+# Static restore excludes: an Omarchy desktop, files ultron and dotfiles own, the default checkout paths.
 MIGRATE_RESTORE_EXCLUDES=(
   /.config/hypr/ /.config/omarchy/ /.local/share/omarchy/ /.local/state/omarchy/ /.config/uwsm/
   /.config/waybar/ /.config/walker/ /.config/elephant/ /.config/quickshell/ /.config/alacritty/
@@ -23,10 +29,61 @@ MIGRATE_RESTORE_EXCLUDES=(
   /.config/zed/ /.config/git/ /Projects/ultron/ /Projects/dotfiles/
 )
 
+_MIG_MOUNTED=""
+
+_migrate_usage() {
+  cat >&2 <<'EOF'
+usage: ultron migrate backup --to DEST [--exclude PATTERN]...
+       ultron migrate restore --from SRC [--dry-run]
+       ultron migrate clean --from SRC
+DEST/SRC: a folder, or a disk as LABEL=x, UUID=x or /dev/x (mounted for the run).
+To find your disks: lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINTS
+EOF
+  exit 1
+}
+
+_migrate_umount() {
+  [[ -n "$_MIG_MOUNTED" ]] || return 0
+  sync
+  if sudo umount "$_MIG_MOUNTED"; then
+    ok "Unmounted $_MIG_MOUNTED"
+  else
+    warn "Couldn't unmount $_MIG_MOUNTED: run sudo umount $_MIG_MOUNTED"
+  fi
+  _MIG_MOUNTED=""
+}
+
+# _migrate_open SPEC: sets MIG_BASE, the folder for SPEC. A device that isn't mounted is mounted at
+# /mnt/ultron-migrate and unmounted again when the command ends (however it ends).
+_migrate_open() {
+  local spec=$1 mp
+  trap '_migrate_umount; sudo_drop' EXIT
+  case $spec in
+  LABEL=* | UUID=* | /dev/*)
+    mp=$(findmnt -n -o TARGET -S "$spec" 2>/dev/null | head -n1 || true)
+    if [[ -n "$mp" ]]; then
+      echo "Using $spec, mounted at $mp"
+    else
+      say "Mounting $spec at $MIGRATE_MNT for this run"
+      sudo mkdir -p "$MIGRATE_MNT"
+      sudo mount "$spec" "$MIGRATE_MNT" ||
+        die "Couldn't mount $spec. Is it connected? Check with: lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINTS"
+      _MIG_MOUNTED=$MIGRATE_MNT
+      mp=$MIGRATE_MNT
+    fi
+    MIG_BASE=$mp
+    ;;
+  *)
+    [[ -d "$spec" ]] || die "$spec isn't a folder or a disk (LABEL=x, UUID=x, /dev/x). Check with: lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINTS"
+    MIG_BASE=$(readlink -f "$spec")
+    ;;
+  esac
+}
+
 _migrate_refuse_running() {
   local p running=()
   for p in "$@"; do
-    pgrep -x "$p" >/dev/null 2>&1 && running+=("$p")
+    if pgrep -x "$p" >/dev/null 2>&1; then running+=("$p"); fi
   done
   ((${#running[@]} == 0)) || die "Close these first (they change files while they run): ${running[*]}"
 }
@@ -36,7 +93,7 @@ _migrate_refuse_running() {
 _migrate_build_dirs() {
   local roots=() r d
   for r in "$HOME/Projects" "$HOME/Work"; do
-    [[ -d "$r" ]] && roots+=("$r")
+    if [[ -d "$r" ]]; then roots+=("$r"); fi
   done
   ((${#roots[@]})) || return 0
   while IFS= read -r -d '' d; do
@@ -45,90 +102,114 @@ _migrate_build_dirs() {
     node_modules) [[ -f "${d%/*}/package.json" ]] || continue ;;
     esac
     printf '/%s/\n' "${d#"$HOME/"}"
-  done < <(find "${roots[@]}" -type d \( -name target -o -name node_modules \) -prune -print0 2>/dev/null)
+  done < <(find "${roots[@]}" -type d \( -name target -o -name node_modules \) -prune -print0 2>/dev/null || true)
 }
 
-# _migrate_transfer_bytes RSYNC_ARGS...: "Total transferred file size" of a dry run.
+# _migrate_transfer_bytes RSYNC_ARGS...: "Total transferred file size" of a dry run (empty when it fails).
 _migrate_transfer_bytes() {
-  sudo rsync -aHAX --dry-run --mkpath --stats "$@" 2>/dev/null |
+  { sudo rsync -aHAX --dry-run --mkpath --stats "$@" 2>/dev/null || true; } |
     sed -n -E 's/^Total transferred file size: ([0-9,]+).*/\1/p' | tr -d ,
 }
 
+# _migrate_docker_cmd: sets MIG_DOCKER to the docker command that reaches this machine's daemon
+# (rootless as you, else rootful through sudo); empty when no daemon answers.
+_migrate_docker_cmd() {
+  MIG_DOCKER=()
+  have docker || return 0
+  if DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock} docker info >/dev/null 2>&1; then
+    MIG_DOCKER=(env "DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}" docker)
+  elif sudo docker info >/dev/null 2>&1; then
+    MIG_DOCKER=(sudo docker)
+  fi
+}
+
 _migrate_backup() {
-  local extra=()
+  local to="" extra=()
   while (($#)); do
     case $1 in
+    --to)
+      [[ -n "${2:-}" ]] || _migrate_usage
+      to=$2
+      shift 2
+      ;;
     --exclude)
       [[ -n "${2:-}" ]] || die "--exclude needs a pattern, like --exclude /Downloads/"
       extra+=("$2")
       shift 2
       ;;
-    *) die "usage: ultron migrate backup [--exclude PATTERN]..." ;;
+    *) _migrate_usage ;;
     esac
   done
+  [[ -n "$to" ]] || _migrate_usage
   ((EUID != 0)) || die "Run this as your user, not root."
-  _migrate_refuse_running omp chrome chromium jocasta
+  local browser
+  read -r browser _ <<<"$(browser_cmd)"
+  _migrate_refuse_running omp chrome chromium firefox jocasta "${browser##*/}"
   sudo_keepalive
-
-  # Mount the SSD (no fstab change); unmount at the end only if mounted here.
-  local mounted_here=0
-  if ! mountpoint -q "$SSD_MOUNT"; then
-    say "Mounting the projects SSD at $SSD_MOUNT"
-    sudo mkdir -p "$SSD_MOUNT"
-    sudo mount "UUID=$SSD_UUID" "$SSD_MOUNT" || die "Couldn't mount the projects SSD (UUID $SSD_UUID). Is it connected?"
-    mounted_here=1
-  fi
-  ls -la "$SSD_MOUNT"
-  df -h "$SSD_MOUNT"
+  _migrate_open "$to"
+  local base=$MIG_BASE home
+  home=$(readlink -f "$HOME")
+  [[ "$base" != "$home" && "$base" != "$home"/* ]] || die "$base is inside your home folder: the copy would copy itself. Pick another disk."
+  ls -la "$base"
+  df -h "$base"
 
   local dest
-  dest=$SSD_MOUNT/ultron-migration-$(date +%F)
-  [[ -e "$dest" ]] && dest+=-$(date +%H%M)
+  dest=$base/ultron-migration-$(date +%F)
+  if [[ -e "$dest" ]]; then dest+=-$(date +%H%M); fi
   [[ ! -e "$dest" ]] || die "$dest already exists; wait a minute and run this again."
 
   local list
   list=$(mktemp)
   {
     printf '%s\n' "${MIGRATE_BACKUP_EXCLUDES[@]}"
-    ((${#extra[@]})) && printf '%s\n' "${extra[@]}"
+    if ((${#extra[@]})); then printf '%s\n' "${extra[@]}"; fi
     _migrate_build_dirs
   } >"$list"
   say "Excluding $(wc -l <"$list") patterns (caches, build folders, the VM, ISOs)"
 
-  # Space check: dry-run size x 1.1 must fit.
+  _migrate_docker_cmd
+  local v vols=() vol_bytes=0 mp b
+  if ((${#MIG_DOCKER[@]})); then
+    mapfile -t vols < <("${MIG_DOCKER[@]}" volume ls -q 2>/dev/null || true)
+    for v in "${vols[@]}"; do
+      mp=$("${MIG_DOCKER[@]}" volume inspect -f '{{.Mountpoint}}' "$v" 2>/dev/null || true)
+      b=$({ sudo du -sb "$mp" 2>/dev/null || true; } | cut -f1)
+      vol_bytes=$((vol_bytes + ${b:-0}))
+    done
+  fi
+
+  # Space check: dry-run size (plus the Docker volumes, before compression) x 1.1 must fit.
   say "Measuring what will be copied (dry run)"
   local need_home need_etc need avail
   need_home=$(_migrate_transfer_bytes --exclude-from="$list" "$HOME/" "$dest/home/")
   need_etc=$(_migrate_transfer_bytes /etc/ "$dest/etc/")
   [[ -n "$need_home" ]] || die "The rsync dry run failed; run it by hand to see why: sudo rsync -aHAX --dry-run --stats --exclude-from=$list ~/ $dest/home/"
-  need=$(((need_home + ${need_etc:-0}) * 11 / 10))
-  avail=$(df --output=avail -B1 "$SSD_MOUNT" | tail -n1 | tr -dc '0-9')
-  echo "Needs about $(numfmt --to=iec "$need") (with 10 % margin); free: $(numfmt --to=iec "$avail")"
+  need=$(((need_home + ${need_etc:-0} + vol_bytes) * 11 / 10))
+  avail=$(df --output=avail -B1 "$base" | tail -n1 | tr -dc '0-9')
+  echo "Needs about $(numfmt --to=iec "$need") (with 10 % margin; Docker volumes: $(numfmt --to=iec "$vol_bytes")); free: $(numfmt --to=iec "$avail")"
   if ((need > avail)); then
     rm -f "$list"
-    ((mounted_here)) && sudo umount "$SSD_MOUNT"
-    die "Not enough space on the SSD. Run again with --exclude /Downloads/ (and copy Downloads to another disk)."
+    die "Not enough space on $base. Run again with --exclude /Downloads/ (and copy Downloads to another disk)."
   fi
 
-  sudo mkdir -p "$dest/home" "$dest/etc" "$dest/docker-volumes"
+  sudo mkdir -p "$dest/home" "$dest/etc"
+  # A rootless daemon's containers write as you, so the volume folder must be yours.
+  sudo install -d -o "$ULTRON_USER" -m 0755 "$dest/docker-volumes"
 
-  # Docker volumes (Omarchy's Docker is rootful).
-  if have docker && sudo docker info >/dev/null 2>&1; then
-    local v vols=()
-    mapfile -t vols < <(sudo docker volume ls -q)
+  if ((${#vols[@]})); then
     say "Exporting ${#vols[@]} Docker volumes"
     for v in "${vols[@]}"; do
       echo "  $v"
-      sudo docker run --rm -v "$v:/v:ro" -v "$dest/docker-volumes:/b" alpine tar -czf "/b/$v.tgz" -C /v . ||
+      "${MIG_DOCKER[@]}" run --rm -v "$v:/v:ro" -v "$dest/docker-volumes:/b" alpine tar -czf "/b/$v.tgz" -C /v . ||
         die "Exporting Docker volume $v failed."
     done
-  else
+  elif ((${#MIG_DOCKER[@]} == 0)); then
     warn "Docker isn't running: no volumes exported"
   fi
 
   say "Copying home to $dest/home/"
   sudo rsync -aHAX --info=progress2 --exclude-from="$list" "$HOME/" "$dest/home/" ||
-    die "Copying home failed (see above). The partial copy is in $dest."
+    die "Copying home failed (see above). The partial copy is in $dest (no COMPLETE marker, so restore skips it)."
 
   say "Copying /etc and the package lists"
   sudo rsync -aHAX /etc/ "$dest/etc/" || die "Copying /etc failed."
@@ -139,67 +220,96 @@ _migrate_backup() {
   sudo install -m 0644 "$tmp" "$dest/pacman-Qqm.txt"
   crontab -l >"$tmp" 2>/dev/null || : >"$tmp"
   sudo install -m 0644 "$tmp" "$dest/crontab.txt"
-  rm -f "$tmp"
 
   # The copy must be complete: a second dry run shows no changes.
   say "Checking the copy (second dry run)"
   local changes
-  changes=$(sudo rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$HOME/" "$dest/home/")
+  if ! changes=$(sudo rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$HOME/" "$dest/home/"); then
+    die "The check run of rsync failed (see above); the copy in $dest isn't marked complete."
+  fi
   if [[ -n "$changes" ]]; then
     warn "Files changed during the copy; copying them again:"
-    printf '%s\n' "$changes" | head -n 20 >&2
-    sudo rsync -aHAX --exclude-from="$list" "$HOME/" "$dest/home/"
-    changes=$(sudo rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$HOME/" "$dest/home/")
+    head -n 20 <<<"$changes" >&2
+    sudo rsync -aHAX --exclude-from="$list" "$HOME/" "$dest/home/" || die "Copying the changed files failed (see above)."
+    if ! changes=$(sudo rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$HOME/" "$dest/home/"); then
+      die "The check run of rsync failed (see above); the copy in $dest isn't marked complete."
+    fi
     if [[ -n "$changes" ]]; then
-      printf '%s\n' "$changes" | head -n 20 >&2
-      rm -f "$list"
+      head -n 20 <<<"$changes" >&2
+      rm -f "$list" "$tmp"
       die "Files keep changing in your home (above). Close the programs that write them, then run ultron migrate backup again."
     fi
   fi
   rm -f "$list"
 
+  date -u +%FT%TZ >"$tmp"
+  sudo install -m 0644 "$tmp" "$dest/COMPLETE"
+  rm -f "$tmp"
   sync
   local size
-  size=$(sudo du -sh "$dest" | cut -f1)
-  if ((mounted_here)); then
-    sudo umount "$SSD_MOUNT"
-    ok "Unmounted $SSD_MOUNT"
+  size=$({ sudo du -sh "$dest" || true; } | cut -f1)
+  ok "Backup done: $dest (${size:-size unknown})"
+  echo "It's a plaintext copy of your home: once the restore is checked, delete it with ultron migrate clean --from $to"
+  _migrate_umount
+}
+
+# _migrate_pick BASE: the copy to restore from. BASE may be a copy itself; otherwise the newest complete one in it.
+_migrate_pick() {
+  local base=$1 d newest="" newer=()
+  if [[ -d "$base/home" ]]; then
+    [[ -e "$base/COMPLETE" ]] || warn "$base has no COMPLETE marker: its backup may not have finished"
+    printf '%s\n' "$base"
+    return 0
   fi
-  ok "Backup done: $dest ($size)"
+  while IFS= read -r d; do
+    if [[ -e "$d/COMPLETE" ]]; then
+      newest=$d
+      newer=()
+    else
+      newer+=("$d")
+    fi
+  done < <(find "$base" -mindepth 1 -maxdepth 1 -type d -name 'ultron-migration-*' 2>/dev/null | sort)
+  if [[ -z "$newest" ]]; then
+    ((${#newer[@]} == 0)) || die "No complete ultron-migration-* copy in $base (unfinished: ${newer[*]}). To use one anyway, pass it: --from <that folder>"
+    die "No ultron-migration-* folder in $base."
+  fi
+  if ((${#newer[@]})); then warn "Skipping newer copies that didn't finish: ${newer[*]}"; fi
+  printf '%s\n' "$newest"
 }
 
 _migrate_restore() {
-  local dir="" dry=0
+  local from="" dry=0
   while (($#)); do
     case $1 in
-    --dir)
-      [[ -n "${2:-}" ]] || die "--dir needs a folder"
-      dir=$2
+    --from)
+      [[ -n "${2:-}" ]] || _migrate_usage
+      from=$2
       shift 2
       ;;
     --dry-run)
       dry=1
       shift
       ;;
-    *) die "usage: ultron migrate restore [--dir D] [--dry-run]" ;;
+    *) _migrate_usage ;;
     esac
   done
+  [[ -n "$from" ]] || _migrate_usage
   ((EUID != 0)) || die "Run this as your user, not root."
-  _migrate_refuse_running chrome chromium
+  local browser
+  read -r browser _ <<<"$(browser_cmd)"
+  _migrate_refuse_running chrome chromium firefox "${browser##*/}"
+  _migrate_open "$from"
 
-  if [[ -z "$dir" ]]; then
-    mountpoint -q "$SSD_MOUNT" || die "$SSD_MOUNT isn't mounted. Check the SSD is connected (ultron doctor), or pass --dir."
-    dir=$(find "$SSD_MOUNT" -mindepth 1 -maxdepth 1 -type d -name 'ultron-migration-*' | sort | tail -n1)
-    [[ -n "$dir" ]] || die "No ultron-migration-* folder in $SSD_MOUNT."
-  fi
-  dir=${dir%/}
+  local dir
+  dir=$(_migrate_pick "$MIG_BASE")
   [[ -d "$dir/home" ]] || die "$dir has no home/ folder: is it an ultron migration copy?"
   say "Restoring from $dir"
 
-  # Excludes: every link in ~ that points into the two repos (stow links), then the static list.
+  # Excludes: every link in ~ that points into the checkouts (stow links), the checkouts themselves,
+  # then the static list.
   local ur dr list l real n_links=0
-  ur=$(readlink -f "$HOME/Projects/ultron")
-  dr=$(readlink -f "$HOME/Projects/dotfiles" 2>/dev/null || printf '%s' "$HOME/Projects/dotfiles")
+  ur=$(readlink -f "$ULTRON_ROOT")
+  dr=$(readlink -f "$DOTFILES_DIR" 2>/dev/null || printf '%s' "$DOTFILES_DIR")
   list=$(mktemp)
   while IFS= read -r -d '' l; do
     real=$(readlink -f "$l" 2>/dev/null || true)
@@ -208,28 +318,31 @@ _migrate_restore() {
       n_links=$((n_links + 1))
     fi
   # 2>/dev/null: rootless Docker keeps folders the user can't read (its overlay work dirs); no stow link is there.
-  done < <(find "$HOME" -xdev \( -path "$HOME/Projects/ultron" -o -path "$HOME/Projects/dotfiles" \) -prune -o -type l -print0 2>/dev/null)
+  done < <(find "$HOME" -xdev \( -path "$ur" -o -path "$dr" \) -prune -o -type l -print0 2>/dev/null || true)
+  local p
+  for p in "$ULTRON_ROOT" "$DOTFILES_DIR"; do
+    if [[ "$p" == "$HOME"/* ]]; then printf '/%s/\n' "${p#"$HOME/"}" >>"$list"; fi
+  done
   printf '%s\n' "${MIGRATE_RESTORE_EXCLUDES[@]}" >>"$list"
-  echo "Skipping $n_links linked files and ${#MIGRATE_RESTORE_EXCLUDES[@]} Omarchy/ultron paths"
+  echo "Skipping $n_links linked files, the ultron and dotfiles checkouts, and ${#MIGRATE_RESTORE_EXCLUDES[@]} desktop paths"
 
-  # Plain rsync as the user, not sudo: the backup kept uid 1000 ownership, so every file the
-  # user owned is readable here, and nothing root-owned can land in ~. -o/-g are ignored for a
-  # non-root rsync, so restored files belong to the user. Unreadable files are reported (exit 23).
+  # Plain rsync as the user, not sudo: the backup kept your uid's ownership, so every file you owned is
+  # readable here, and nothing root-owned can land in ~. -o/-g are ignored for a non-root rsync, so restored
+  # files belong to you. Unreadable files are reported (exit 23).
   if ((dry)); then
     rsync -aHAX --dry-run --itemize-changes --exclude-from="$list" "$dir/home/" "$HOME/" >"$MIGRATE_PREVIEW" ||
       warn "rsync reported problems (see above)"
     local count
     count=$(grep -c . "$MIGRATE_PREVIEW" || true)
     say "Dry run: $count changes (full list: $MIGRATE_PREVIEW). By top-level folder:"
-    cut -d' ' -f2- "$MIGRATE_PREVIEW" | awk -F/ 'NF { print $1 }' | sort | uniq -c | sort -rn | head -n 25
-    if [[ -d "$dir/docker-volumes" ]]; then
-      local tgz
-      for tgz in "$dir"/docker-volumes/*.tgz; do
-        [[ -e "$tgz" ]] && echo "  docker volume: $(basename "$tgz" .tgz)"
-      done
-    fi
+    cut -d' ' -f2- "$MIGRATE_PREVIEW" | awk -F/ 'NF { print $1 }' | sort | uniq -c | sort -rn | head -n 25 || true
+    local tgz
+    for tgz in "$dir"/docker-volumes/*.tgz; do
+      if [[ -e "$tgz" ]]; then echo "  docker volume: $(basename "$tgz" .tgz)"; fi
+    done
     rm -f "$list"
     ok "Nothing was changed. Run without --dry-run to restore."
+    _migrate_umount
     return 0
   fi
 
@@ -243,21 +356,68 @@ _migrate_restore() {
   *) die "rsync failed (exit $rc)" ;;
   esac
 
-  if [[ -d "$dir/docker-volumes" ]]; then
-    local tgz v
-    export DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}
-    for tgz in "$dir"/docker-volumes/*.tgz; do
-      [[ -e "$tgz" ]] || continue
-      v=$(basename "$tgz" .tgz)
-      say "Importing Docker volume $v (rootless)"
-      docker volume create "$v" >/dev/null
-      docker run --rm -v "$v:/v" -v "$dir/docker-volumes:/b:ro" alpine tar -xzf "/b/$v.tgz" -C /v ||
-        die "Importing Docker volume $v failed."
-    done
-  fi
+  local tgz v
+  export DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}
+  for tgz in "$dir"/docker-volumes/*.tgz; do
+    [[ -e "$tgz" ]] || continue
+    v=$(basename "$tgz" .tgz)
+    say "Importing Docker volume $v (rootless)"
+    docker volume create "$v" >/dev/null || die "Couldn't create Docker volume $v (is rootless Docker running? ultron install docker)"
+    docker run --rm -v "$v:/v" -v "$dir/docker-volumes:/b:ro" alpine tar -xzf "/b/$v.tgz" -C /v ||
+      die "Importing Docker volume $v failed."
+  done
 
   xdg-user-dirs-update
-  ok "Restore done. Next: ultron install jocasta"
+  # The restored omp config lacks ultron's settings (its idle inhibitor would turn off the typing guard,
+  # away alerts and auto-lock).
+  set_omp_settings
+  _migrate_umount
+  ok "Restore done. Check your files, run ultron doctor, then delete the copy: ultron migrate clean --from $from"
+}
+
+_migrate_clean() {
+  local from=""
+  while (($#)); do
+    case $1 in
+    --from)
+      [[ -n "${2:-}" ]] || _migrate_usage
+      from=$2
+      shift 2
+      ;;
+    *) _migrate_usage ;;
+    esac
+  done
+  [[ -n "$from" ]] || _migrate_usage
+  ((EUID != 0)) || die "Run this as your user, not root."
+  sudo_keepalive
+  _migrate_open "$from"
+  local base=$MIG_BASE dirs=() d answer
+  if [[ "${base##*/}" == ultron-migration-* ]]; then
+    dirs=("$base")
+  else
+    mapfile -t dirs < <(find "$base" -mindepth 1 -maxdepth 1 -type d -name 'ultron-migration-*' 2>/dev/null | sort || true)
+  fi
+  if ((${#dirs[@]} == 0)); then
+    ok "No ultron-migration-* folders in $base"
+    _migrate_umount
+    return 0
+  fi
+  echo "Copies in $base:"
+  for d in "${dirs[@]}"; do
+    printf '  %8s  %s\n' "$({ sudo du -sh "$d" 2>/dev/null || true; } | cut -f1)" "$d"
+  done
+  [[ -t 0 ]] || die "Run this in a terminal: it asks before deleting."
+  read -rp "Delete these copies for good? [y/N] " answer
+  [[ "$answer" =~ ^[Yy] ]] || die "Nothing was deleted."
+  for d in "${dirs[@]}"; do
+    say "Deleting $d"
+    sudo rm -rf --one-file-system -- "$d" || die "Couldn't delete $d (see above)."
+  done
+  local mnt
+  mnt=$(findmnt -n -o TARGET -T "$base" 2>/dev/null || true)
+  if [[ -n "$mnt" ]]; then sudo fstrim "$mnt" >/dev/null 2>&1 || true; fi
+  _migrate_umount
+  ok "Deleted ${#dirs[@]} copies"
 }
 
 cmd_migrate() {
@@ -266,6 +426,7 @@ cmd_migrate() {
   case $sub in
   backup) _migrate_backup "$@" ;;
   restore) _migrate_restore "$@" ;;
-  *) die "usage: ultron migrate backup [--exclude PATTERN]... | restore [--dir D] [--dry-run]" ;;
+  clean) _migrate_clean "$@" ;;
+  *) _migrate_usage ;;
   esac
 }

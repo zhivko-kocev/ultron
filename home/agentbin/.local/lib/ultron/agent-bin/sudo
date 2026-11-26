@@ -1,3 +1,4 @@
 #!/bin/sh
-# First on PATH only inside the boss window: an agent's sudo always asks through the askpass popup.
-exec /usr/bin/sudo -A "$@"
+# First on PATH for agents (the boss window, `ultron agent run`): sudo asks through ultron's popup.
+# -k: never use or leave a cached sudo ticket, so every root command gets its own popup.
+exec /usr/bin/sudo -k -A "$@"

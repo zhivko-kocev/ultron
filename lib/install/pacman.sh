@@ -7,8 +7,10 @@ step_pacman() {
     -e 's/^#[[:space:]]*Color[[:space:]]*$/Color/' \
     -e 's/^#?[[:space:]]*ParallelDownloads[[:space:]]*=.*/ParallelDownloads = 8/' \
     /etc/pacman.conf
-  grep -q '^ParallelDownloads = 8' /etc/pacman.conf ||
+  if ! grep -q '^ParallelDownloads = 8' /etc/pacman.conf; then
     sudo sed -i -E 's/^\[options\]$/[options]\nParallelDownloads = 8/' /etc/pacman.conf
-  grep -q '^Color' /etc/pacman.conf ||
+  fi
+  if ! grep -q '^Color' /etc/pacman.conf; then
     sudo sed -i -E 's/^\[options\]$/[options]\nColor/' /etc/pacman.conf
+  fi
 }

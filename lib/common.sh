@@ -2,20 +2,20 @@
 # Shared helpers for bin/ultron, lib/cmd/*.sh and lib/install/*.sh.
 # Sourced by bin/ultron after `set -euo pipefail`; ULTRON_ROOT is set by the caller.
 
-ULTRON_USER="zhivko-kocev"
-ULTRON_REPO_URL="https://github.com/zhivko-kocev/ultron"
-DOTFILES_REPO_URL="https://github.com/zhivko-kocev/dotfiles"
-JOCASTA_REPO_URL="https://github.com/zhivko-kocev/jocasta"
-SSD_UUID="f4d0a7a7-ee8c-458c-91aa-3f2dceacb527"
-SSD_MOUNT="/mnt/projects"
-ULTRON_CONF="$HOME/.config/ultron/ultron.conf"
+ULTRON_USER=${USER:-$(id -un)}
+ULTRON_CONF_DIR="$HOME/.config/ultron"
+ULTRON_CONF="$ULTRON_CONF_DIR/ultron.conf"
+ULTRON_GEN="$ULTRON_CONF_DIR/generated"
+ULTRON_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/ultron"
+ULTRON_DATA="$HOME/.local/share/ultron"
 NTFY_ENV="/etc/ultron/ntfy.env"
-PREVIEW_PROFILE="$HOME/.local/share/ultron/chromium-preview"
-JOCASTA_NOTES="$HOME/.local/share/ultron/jocasta-notes.md"
+PREVIEW_PROFILE="$ULTRON_DATA/chromium-preview"
+DOTFILES_DIR="$HOME/Projects/dotfiles"
+JOCASTA_REPO_URL="https://github.com/zhivko-kocev/jocasta"
+JOCASTA_NOTES="$ULTRON_DATA/jocasta-notes.md"
 JOCASTA_DIR="$HOME/Projects/jocasta"
 JOCASTA_INSTALL_DIR="$HOME/.local/lib/jocasta"
 AGENT_BIN="$HOME/.local/lib/ultron/agent-bin"
-OMP_COMMIT_ROLE="ollama/qwen3:4b, anthropic/claude-haiku-5-5:low"
 
 # Runtime state ($R): idle2, away, focus, back, needs-you, jump.lock.
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -45,50 +45,169 @@ die() {
 
 is_vm() { systemd-detect-virt -q --vm; }
 is_uefi() { [[ -d /sys/firmware/efi/efivars ]]; }
+is_laptop() { compgen -G "/sys/class/power_supply/BAT*" >/dev/null; }
 in_sway() { [[ -n "${SWAYSOCK:-}" ]] && swaymsg -t get_version >/dev/null 2>&1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 ensure_rundir() { mkdir -p "$R"; }
 
-# conf_get KEY [DEFAULT]: value of KEY=VALUE in ultron.conf (no sourcing).
-conf_get() {
-  local key=$1 def=${2:-} line val=""
-  if [[ -r "$ULTRON_CONF" ]]; then
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      [[ "$line" == "$key="* ]] && val=${line#*=}
-    done <"$ULTRON_CONF"
-  fi
-  val=${val%\"} val=${val#\"}
-  printf '%s\n' "${val:-$def}"
+# ultron_repo_url: where this checkout came from (a fork installs from itself).
+ultron_repo_url() {
+  git -C "$ULTRON_ROOT" config --get remote.origin.url 2>/dev/null || echo "https://github.com/zhivko-kocev/ultron"
 }
 
-# conf_set KEY VALUE: create or replace KEY=VALUE in ultron.conf.
+# ---- settings -------------------------------------------------------------------
+# KEY=value files: conf.d/*.conf in name order, then ultron.conf (the last one read wins).
+# Files are parsed, never sourced. An empty value means "use the default".
+
+_CONF_KEYS=(BOSS BROWSER THEME KEYBOARD KEYBOARD_VARIANT LOCAL_AI ASK_MODEL OLLAMA_GPU
+  DOTFILES_REPO MOUNTS FIREWALL_ALLOW AWAY_AFTER LOCK_AFTER SCREEN_OFF_AFTER)
+declare -A _CONF_DEFAULT=(
+  [BOSS]=omp [BROWSER]=chromium [THEME]=gruvbox-dark [KEYBOARD]=us [KEYBOARD_VARIANT]=""
+  [LOCAL_AI]=yes [ASK_MODEL]=qwen3:4b [OLLAMA_GPU]=auto [DOTFILES_REPO]="" [MOUNTS]="" [FIREWALL_ALLOW]=""
+  [AWAY_AFTER]=300 [LOCK_AFTER]=600 [SCREEN_OFF_AFTER]=900
+)
+declare -A _CONF=()
+_CONF_LOADED=0
+
+# _kv_read FILE ARRAY: KEY=value lines of FILE into the associative array named ARRAY.
+# Comment and blank lines are skipped; surrounding quotes and spaces are dropped.
+_kv_read() {
+  local -n _into=$2
+  local line key val
+  [[ -r "$1" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+    [[ "$line" =~ ^[[:space:]]*([A-Z][A-Z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
+    key=${BASH_REMATCH[1]} val=${BASH_REMATCH[2]}
+    val=${val#"${val%%[![:space:]]*}"}
+    val=${val%"${val##*[![:space:]]}"}
+    if ((${#val} >= 2)) && [[ "$val" == \"*\" || "$val" == \'*\' ]]; then val=${val:1:${#val}-2}; fi
+    # shellcheck disable=SC2004 # _into is an associative array: $key is a string key, not arithmetic
+    _into[$key]=$val
+  done <"$1"
+}
+
+conf_load() {
+  local f
+  _CONF=()
+  for f in "$ULTRON_CONF_DIR"/conf.d/*.conf; do
+    if [[ -e "$f" ]]; then _kv_read "$f" _CONF; fi
+  done
+  _kv_read "$ULTRON_CONF" _CONF
+  _CONF_LOADED=1
+}
+
+conf_keys() { printf '%s\n' "${_CONF_KEYS[@]}"; }
+conf_default() { printf '%s\n' "${_CONF_DEFAULT[$1]-}"; }
+
+# conf_var VAR KEY [DEFAULT]: the setting into VAR (no subshell): else DEFAULT, else the built-in default.
+conf_var() {
+  local -n _out=$1
+  ((_CONF_LOADED)) || conf_load
+  _out=${_CONF[$2]-}
+  if [[ -z "$_out" ]]; then
+    if (($# >= 3)); then _out=$3; else _out=${_CONF_DEFAULT[$2]-}; fi
+  fi
+}
+
+# conf_get KEY [DEFAULT]: print the setting.
+conf_get() {
+  local _v
+  conf_var _v "$@"
+  printf '%s\n' "$_v"
+}
+
+# conf_set KEY VALUE: create or replace KEY=VALUE in ultron.conf (the machine's own file).
 conf_set() {
   local key=$1 val=$2 tmp
-  mkdir -p "${ULTRON_CONF%/*}"
-  touch "$ULTRON_CONF"
-  tmp=$(mktemp)
-  grep -v "^$key=" "$ULTRON_CONF" >"$tmp" || true
+  [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "not a setting name: $key"
+  [[ "$val" != *$'\n'* ]] || die "a setting can't span lines"
+  mkdir -p "$ULTRON_CONF_DIR"
+  [[ -e "$ULTRON_CONF" ]] || : >"$ULTRON_CONF"
+  tmp=$(mktemp "$ULTRON_CONF_DIR/.ultron.conf.XXXXXX")
+  grep -v -E "^[[:space:]]*${key}[[:space:]]*=" "$ULTRON_CONF" >"$tmp" || true
   printf '%s=%s\n' "$key" "$val" >>"$tmp"
   mv "$tmp" "$ULTRON_CONF"
+  _CONF_LOADED=0
 }
 
-boss_kind() { conf_get BOSS omp; }
+boss_kind() { conf_get BOSS; }
+browser_cmd() { conf_get BROWSER; }
+ask_model() { conf_get ASK_MODEL; }
+
+# conf_mounts: the MOUNTS setting as "SPEC MOUNTPOINT" lines (SPEC = LABEL=x, UUID=x or /dev/x).
+conf_mounts() {
+  local item mounts
+  conf_var mounts MOUNTS
+  for item in $mounts; do
+    if [[ "$item" == ?*:/?* ]]; then
+      printf '%s /%s\n' "${item%%:/*}" "${item#*:/}"
+    else
+      warn "MOUNTS entry '$item' isn't SPEC:/mountpoint: skipped"
+    fi
+  done
+}
+
+# ---- theme ------------------------------------------------------------------------
+# A theme is a KEY=value palette file (hex colours without #). Yours in ~/.config/ultron/themes win.
+
+declare -A _THEME=()
+_THEME_LOADED=""
+
+# theme_path [NAME]: the file of a theme; 1 when there is none.
+theme_path() {
+  local name=${1:-} d
+  [[ -n "$name" ]] || conf_var name THEME
+  for d in "$ULTRON_CONF_DIR/themes" "$ULTRON_ROOT/themes"; do
+    if [[ -f "$d/$name.conf" ]]; then
+      printf '%s\n' "$d/$name.conf"
+      return 0
+    fi
+  done
+  return 1
+}
+
+theme_names() {
+  local f
+  for f in "$ULTRON_ROOT"/themes/*.conf "$ULTRON_CONF_DIR"/themes/*.conf; do
+    if [[ -e "$f" ]]; then basename "$f" .conf; fi
+  done | sort -u
+}
+
+# theme_load [NAME]: fills _THEME. gruvbox-dark is read first, so a partial theme still has every key.
+theme_load() {
+  local name=${1:-} file key
+  [[ -n "$name" ]] || conf_var name THEME
+  _THEME=()
+  _kv_read "$ULTRON_ROOT/themes/gruvbox-dark.conf" _THEME
+  if file=$(theme_path "$name"); then
+    _kv_read "$file" _THEME
+  else
+    warn "no theme named '$name': using gruvbox-dark"
+  fi
+  for key in "${!_THEME[@]}"; do _THEME[$key]=${_THEME[$key]#\#}; done
+  _THEME_LOADED=$name
+}
+
+# theme_get KEY: a palette value of the current theme (hex without #). In a loop, call theme_load
+# once and read ${_THEME[KEY]} instead.
+theme_get() {
+  [[ -n "$_THEME_LOADED" ]] || theme_load
+  printf '%s\n' "${_THEME[$1]-}"
+}
+
+# ---- boss, phone, presence ----------------------------------------------------------
 
 jocasta_data_dir() { printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/jocasta/data"; }
 jocasta_running() { pgrep -x jocasta >/dev/null 2>&1; }
 
-# ntfy_load: sets NTFY_URL/NTFY_TOKEN/NTFY_PUBLIC from /etc/ultron/ntfy.env; returns 1 if unreadable.
+# ntfy_load: sets NTFY_URL/NTFY_TOKEN from /etc/ultron/ntfy.env; 1 when phone alerts aren't set up.
 ntfy_load() {
   [[ -r "$NTFY_ENV" ]] || return 1
-  local line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    case $line in
-    NTFY_URL=*) NTFY_URL=${line#*=} ;;
-    NTFY_TOKEN=*) NTFY_TOKEN=${line#*=} ;;
-    NTFY_PUBLIC=*) NTFY_PUBLIC=${line#*=} ;;
-    esac
-  done <"$NTFY_ENV"
-  [[ -n "${NTFY_URL:-}" && -n "${NTFY_TOKEN:-}" ]]
+  local -A env=()
+  _kv_read "$NTFY_ENV" env
+  NTFY_URL=${env[NTFY_URL]-} NTFY_TOKEN=${env[NTFY_TOKEN]-}
+  [[ -n "$NTFY_URL" && -n "$NTFY_TOKEN" ]]
 }
 
 is_away() { [[ -e "$R/away" ]] || pgrep -x swaylock >/dev/null 2>&1; }
@@ -104,7 +223,9 @@ wait_idle() {
   done
 }
 
-# sway_ids JQ_FILTER: con_ids of tree nodes matching the jq select filter, newest last.
+# ---- sway -----------------------------------------------------------------------------
+
+# sway_ids JQ_FILTER: con_ids of windows matching the jq select filter, oldest first.
 sway_ids() {
   swaymsg -t get_tree | jq -r "[.. | objects | select(has(\"app_id\") or has(\"window_properties\")) | select($1) | .id] | sort | .[]"
 }
@@ -118,6 +239,22 @@ wait_window() {
       printf '%s\n' "$id"
       return 0
     fi
+    sleep 0.1
+  done
+  return 1
+}
+
+# wait_new_window BEFORE_IDS JQ_FILTER [TIMEOUT_S]: con_id of a window matching the filter that is
+# not in BEFORE_IDS (space-separated); 1 on timeout. For apps whose app_id can't be chosen.
+wait_new_window() {
+  local before=" $1 " filter=$2 limit=${3:-20} i cand
+  for ((i = 0; i < limit * 10; i++)); do
+    while IFS= read -r cand; do
+      if [[ -n "$cand" && "$before" != *" $cand "* ]]; then
+        printf '%s\n' "$cand"
+        return 0
+      fi
+    done < <(sway_ids "$filter")
     sleep 0.1
   done
   return 1
@@ -137,17 +274,80 @@ ws_name() {
 # detach CMD...: run fully detached from this process (new session, no stdio).
 detach() { setsid -f "$@" </dev/null >/dev/null 2>&1; }
 
+# ---- desktop UI ---------------------------------------------------------------------------
+
 desktop_notify() { notify-send -a ultron "$@" 2>/dev/null || true; }
 
-# sudo_keepalive: ask once, refresh in the background until this shell exits.
+# pick PROMPT [FUZZEL_OPTION...]: options on stdin, the chosen line on stdout; 1 when cancelled.
+pick() {
+  local prompt=$1
+  shift
+  fuzzel --dmenu --prompt "$prompt ▸ " "$@"
+}
+
+# ask_text PROMPT [FUZZEL_OPTION...]: one line of text from the user; 1 when cancelled or empty.
+ask_text() {
+  local prompt=$1 out
+  shift
+  out=$(fuzzel --dmenu --lines 0 --prompt "$prompt ▸ " "$@" </dev/null) || return 1
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+
+# confirm MESSAGE: No/Yes; 0 only for Yes.
+confirm() {
+  local ans
+  ans=$(printf 'No\nYes\n' | fuzzel --dmenu --lines 2 --prompt "▸ " --mesg "$1") || return 1
+  [[ $ans == Yes ]]
+}
+
+# term_run [--hold] [--title T] -- CMD...: run CMD in a floating terminal (app_id ultron-float).
+term_run() {
+  local args=(--app-id=ultron-float)
+  while (($#)); do
+    case $1 in
+    --hold) args+=(--hold) ;;
+    --title)
+      args+=(--title="${2:?--title needs a value}")
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *) break ;;
+    esac
+    shift
+  done
+  (($#)) || die "term_run needs a command"
+  detach foot "${args[@]}" -- "$@"
+}
+
+# ---- install helpers --------------------------------------------------------------------------
+
+_ULTRON_SUDO_PID=""
+
+# sudo_keepalive: ask once, refresh in the background until sudo_drop or this shell's exit.
 sudo_keepalive() {
+  [[ -z "$_ULTRON_SUDO_PID" ]] || return 0
   sudo -v || die "sudo failed"
+  # No inherited stdout/stderr: a leftover `sleep` would otherwise keep `ultron install | tee log` open.
   (while kill -0 "$$" 2>/dev/null; do
     sudo -n -v 2>/dev/null || true
     sleep 30
-  done) &
+  done) </dev/null >/dev/null 2>&1 &
   _ULTRON_SUDO_PID=$!
-  trap 'kill "$_ULTRON_SUDO_PID" 2>/dev/null || true' EXIT
+  trap sudo_drop EXIT
+}
+
+# sudo_drop: stop refreshing and throw the cached sudo ticket away, so nothing that runs later in
+# this terminal (third-party installers, a pasted command) is root without a new password.
+sudo_drop() {
+  if [[ -n "$_ULTRON_SUDO_PID" ]]; then
+    kill "$_ULTRON_SUDO_PID" 2>/dev/null || true
+    _ULTRON_SUDO_PID=""
+  fi
+  sudo -k 2>/dev/null || true
 }
 
 # list_packages FILE...: package names from list files (comments and blanks stripped).

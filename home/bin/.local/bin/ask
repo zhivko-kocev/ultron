@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ask "question": one-shot answer from the local model (ollama, qwen3:4b by default).
+# ask "question": one-shot answer from the local model (ollama; ASK_MODEL setting, qwen3:4b by default).
 # Piped input is passed through: `git diff | ask "summarise this"`.
 set -euo pipefail
 
@@ -8,6 +8,11 @@ if [[ $# -eq 0 && -t 0 ]]; then
   exit 2
 fi
 
+model=${ULTRON_ASK_MODEL:-}
+if [[ -z "$model" ]] && command -v ultron >/dev/null 2>&1; then
+  model=$(ultron conf get ASK_MODEL 2>/dev/null) || model=""
+fi
+
 # When stdin is a pipe, ollama run reads it and adds it to the prompt; exec keeps that stdin.
 # --hidethinking, not --think=false: qwen3:4b ignored think=false in testing and printed its reasoning as the answer.
-exec ollama run "${ULTRON_ASK_MODEL:-qwen3:4b}" --hidethinking "$*"
+exec ollama run "${model:-qwen3:4b}" --hidethinking "$*"

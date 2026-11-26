@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# step agents: the agent tools pinned in /etc/mise/conf.d/ultron-tools.toml (omp, hunk, node).
+# step agents: the agent tools pinned in /etc/mise/conf.d/ultron-tools.toml (omp, hunk, node) and omp's
+# settings. No sudo: mise installs third-party code, which must never run inside a sudo ticket.
 
 step_agents() {
   [[ -r "$ULTRON_TOOLS_CONF" ]] || die "$ULTRON_TOOLS_CONF is missing: run ultron install system first."

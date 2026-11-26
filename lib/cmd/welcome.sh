@@ -1,0 +1,46 @@
+# shellcheck shell=bash
+# ultron welcome [--once]: the first-login guide. --once shows it only the first time.
+
+_welcome_text() {
+  local boss
+  boss=$(boss_kind)
+  cat <<EOF
+Welcome to ultron.
+
+  Super+Alt+Space   the menu: install, remove, setup, style, update, power
+  Super+K           every key, searchable
+  Super+Space       open an app            Super+Return   a terminal
+  Super+1 … 0       go to a workspace      Super+W        close a window
+
+Workspace 1 holds your boss agent ($boss). Sign it in once: press Super+B,
+click into it and type /login (omp and claude; other agents print their own
+sign-in steps).
+
+Wi-Fi, Bluetooth, sound, screens, keyboard layout, browser, git identity
+and time zone: menu, then Setup.
+
+More agents (claude, codex, gemini, …), languages (node, python, go, rust, …),
+apps and web apps: menu, then Install.
+
+Keep everything current:   ultron update
+Check that all is well:    ultron doctor
+
+Your settings live in ~/.config/ultron/ (ultron conf edit opens them).
+How to change anything:    $ULTRON_ROOT/docs/customize.md
+
+Show this again any time:  ultron welcome
+EOF
+}
+
+cmd_welcome() {
+  case ${1:-} in
+  --once)
+    [[ -e "$ULTRON_STATE/welcomed" ]] && return 0
+    mkdir -p "$ULTRON_STATE"
+    : >"$ULTRON_STATE/welcomed"
+    term_run --hold --title Welcome -- "$ULTRON_ROOT/bin/ultron" welcome
+    ;;
+  "") _welcome_text ;;
+  *) die "usage: ultron welcome [--once]" ;;
+  esac
+}

@@ -11,31 +11,48 @@ usage() {
   cat <<'EOF'
 usage: ultron <command> [args]
 
-  install [step...]   install or repair (steps: preflight pacman packages aur system boot
-                      desktop agents docker ai dotfiles verify; on demand: jocasta net ntfy)
-  update              pull, reinstall, upgrade packages and tools, rebuild Jocasta
-  doctor [--deep]     check the whole system
-  show review|web|watch ...   open something for the user on workspace 2 / 3 / 4
-  open-url URL        route a link: localhost to the preview, else Chrome
+Everyday
+  menu                everything in one menu (Super+Alt+Space)
+  keys                key cheat sheet (Super+K)
+  update              update ultron, packages, tools and agents
+  doctor [--root|--deep]   check the system (no password needed without flags)
+  theme [NAME|--list] switch the colour theme
+  conf [list|get KEY|set KEY VALUE|edit]   this machine's settings
+  setup TOPIC         wifi bluetooth audio display keyboard browser boss git dotfiles
+                      timezone remote phone model
+  pkg install|remove [NAME...]   packages (official and AUR)
+  dev list|add|remove [TOOL]     languages and runtimes (mise)
+  webapp add|remove|list         web apps as launcher entries
+  install [step...]   install or repair (steps: preflight pacman dotfiles packages hardware
+                      aur system boot ai docker desktop agents verify; on demand: jocasta net ntfy)
+  migrate backup|restore|clean   move a home folder between installs
+
+Agents
+  agent list|add|remove|run|boss   coding agents (omp, claude, codex, gemini, opencode, ...)
+  guide               the rules of this machine, for agents
+  info [--json]       facts about this machine, for agents
+  show review|web|watch|file|list|close   open something for the user on workspace 2 / 3 / 4
+  attention [--raise TITLE|--done TITLE]  tell the user an agent needs them / has finished
+  notify [--phone] [--urgent] TITLE BODY
+  boss [--start]      start or show the boss window
+  task                new thread (when the boss is Jocasta)
+
+Desktop (bound to keys)
+  browser [URL]       the everyday browser
+  open-url URL        route a link: localhost to the preview, else the browser
   jump N [--con-id C|--app-id A]   move the user to workspace N (typing guard)
   back                return to the workspace before the last jump
-  focus [toggle|on|off]   focus mode (no jumps)
-  attention [--away]  go to whatever needs you
-  boss [--start]      start or show the boss window
-  task                Jocasta's New thread question
+  focus [toggle|on|off]   focus mode (agents don't move you)
   snap                region screenshot for the boss
   shot region|full    screenshots
   clip                clipboard history
   close               close the focused window (asks for the boss)
   power               power menu
   lock                lock the screen
-  keys                key cheat sheet
-  notify [--phone] [--urgent] TITLE BODY
-  status              swaybar status line
-  attentiond          attention daemon (run by systemd)
-  note jocasta        note a Jocasta friction point
-  stremio             Stremio
-  migrate backup|restore ...   the one-time migration copy
+  apply               regenerate themed config and reload
+
+Internal: status, idle, attentiond, welcome, note
+Docs: docs/ in the ultron folder (customize.md, agents.md, keys.md, security.md)
 EOF
 }
 

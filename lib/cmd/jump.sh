@@ -25,7 +25,7 @@ cmd_jump() {
   ensure_rundir
 
   if [[ -e "$R/focus" ]]; then
-    [[ -n "$crit" ]] && swaymsg "$crit urgent enable" >/dev/null 2>&1 || true
+    if [[ -n "$crit" ]]; then swaymsg "$crit urgent enable" >/dev/null 2>&1 || true; fi
     return 0
   fi
 
@@ -34,14 +34,19 @@ cmd_jump() {
   flock -w 120 9 || die "another jump is still pending"
 
   if ! wait_idle 60; then
-    [[ -n "$crit" ]] && swaymsg "$crit urgent enable" >/dev/null 2>&1 || true
+    if [[ -n "$crit" ]]; then swaymsg "$crit urgent enable" >/dev/null 2>&1 || true; fi
     desktop_notify -u critical "Workspace $ws wants you" "Press Super+A to go there"
+    return 0
+  fi
+  # Focus mode may have been switched on while this jump waited.
+  if [[ -e "$R/focus" ]]; then
+    if [[ -n "$crit" ]]; then swaymsg "$crit urgent enable" >/dev/null 2>&1 || true; fi
     return 0
   fi
 
   local cur
   cur=$(focused_ws)
-  [[ "$cur" != "$ws" ]] && printf '%s\n' "$cur" >"$R/back"
+  if [[ "$cur" != "$ws" ]]; then printf '%s\n' "$cur" >"$R/back"; fi
   swaymsg "workspace \"$ws\"" >/dev/null
-  [[ -n "$crit" ]] && swaymsg "$crit focus" >/dev/null 2>&1 || true
+  if [[ -n "$crit" ]]; then swaymsg "$crit focus" >/dev/null 2>&1 || true; fi
 }

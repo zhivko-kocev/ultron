@@ -35,7 +35,7 @@ Usage: ultron-vm <command>
   type TEXT            type TEXT into the VM (\n is Enter)
   key COMBO            press one key combination, like ret, ctrl-alt-f2 or meta_l-ret
   shot FILE.png        save a screenshot of the VM's screen
-  ssh [CMD...]         ssh to zhivko-kocev@ the VM (port 2222 on 127.0.0.1)
+  ssh [CMD...]         ssh to the VM as $ULTRON_VM_USER (default: your user name), port 2222
   destroy              delete the VM disk and downloads (asks first)
 EOF
 }
@@ -71,8 +71,11 @@ verify_signature() { # verify_signature ISO
     say "Signature OK (gpg with key retrieval)"
     return 0
   fi
-  warn "Could not check the ISO's signature (no access to the pacman keyring, and gpg could not fetch the key)."
-  warn "Continuing because the SHA-256 checksum matched. To check by hand: pacman-key -v $iso.sig"
+  if [[ ${ULTRON_VM_SKIP_SIG:-} == 1 ]]; then
+    warn "ISO signature NOT checked (ULTRON_VM_SKIP_SIG=1); only the SHA-256 checksum matched."
+    return 0
+  fi
+  die "Could not verify the ISO's signature (pacman keyring and gpg both failed). The checksum file comes from the same mirror, so it proves nothing on its own. Check by hand with: pacman-key -v $iso.sig   (to continue anyway: ULTRON_VM_SKIP_SIG=1)"
 }
 
 cmd_create() {
@@ -240,12 +243,12 @@ cmd_shot() {
   say "Saved $file"
 }
 
-# cmd_ssh: ssh into the VM; uses $STATE/id_vm when it exists, user $ULTRON_VM_USER (default zhivko-kocev).
+# cmd_ssh: ssh into the VM; uses $STATE/id_vm when it exists, user $ULTRON_VM_USER (default: $USER).
 cmd_ssh() {
   local key=()
-  [[ -f $STATE/id_vm ]] && key=(-i "$STATE/id_vm")
+  if [[ -f $STATE/id_vm ]]; then key=(-i "$STATE/id_vm"); fi
   exec ssh -p "$SSH_PORT" "${key[@]}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-    "${ULTRON_VM_USER:-zhivko-kocev}@127.0.0.1" "$@"
+    "${ULTRON_VM_USER:-$USER}@127.0.0.1" "$@"
 }
 
 cmd_destroy() {

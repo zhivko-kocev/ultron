@@ -1,6 +1,0 @@
-timeout 2 'touch "$XDG_RUNTIME_DIR/ultron/idle2"' resume 'rm -f "$XDG_RUNTIME_DIR/ultron/idle2"'
-timeout 300 'ultron attention --away' resume 'rm -f "$XDG_RUNTIME_DIR/ultron/away"'
-timeout 600 'ultron lock'
-timeout 900 'swaymsg "output * power off"' resume 'swaymsg "output * power on"'
-before-sleep 'swaylock -f'
-lock 'ultron lock'

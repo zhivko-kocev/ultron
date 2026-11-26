@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# ultron askpass: sudo -A runs this as the user. It shows the exact command and folder,
-# waits for the typing guard, pushes to the phone when away, then asks in a fuzzel popup.
+# ultron askpass: sudo -A runs this as the user. It shows exactly what sudo was asked to do and
+# where, waits for the typing guard, pushes to the phone when away, then asks in a fuzzel popup.
 # It prints the password on stdout; Esc or the 10-minute timeout make sudo fail.
+#
+# What this is: informed consent for honest agents. What it is not: a wall against a hostile
+# program running as you (see docs/security.md).
 set -euo pipefail
 
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
 rundir=$XDG_RUNTIME_DIR/ultron
 ntfy_env=/etc/ultron/ntfy.env
+max_len=600
+
+refuse() {
+  notify-send -u critical -a ultron "Root access refused" "$1" 2>/dev/null || true
+  printf 'ultron askpass: %s\n' "$1" >&2
+  exit 1
+}
 
 # The parent is sudo: its command line (NUL-separated). sudo is setuid root, so its /proc cwd link
 # can't be read as the user; askpass inherits sudo's folder, which is the caller's.
@@ -16,54 +26,98 @@ if [[ -r /proc/$PPID/cmdline ]]; then
   mapfile -d '' -t args </proc/"$PPID"/cmdline
 fi
 folder=$(pwd -P 2>/dev/null || echo "?")
+prog=${args[0]:-sudo}
+prog=${prog##*/}
+args=("${args[@]:1}")
 
-# Drop the leading sudo and its options, keeping only the command it will run.
-if ((${#args[@]} > 0)) && [[ ${args[0]##*/} == sudo ]]; then
-  args=("${args[@]:1}")
-  while ((${#args[@]} > 0)); do
-    a=${args[0]}
-    case $a in
-    --)
-      args=("${args[@]:1}")
-      break
-      ;;
-    --user | --group | --close-from | --chdir | --host | --prompt | --role | --type | --command-timeout | --other-user | --chroot)
-      args=("${args[@]:2}")
-      ;;
-    --*)
-      args=("${args[@]:1}")
-      ;;
-    -?*)
-      # Short options may be grouped (-Ak); an option taking a value may have it attached (-uroot) or next.
-      opts=${a#-}
-      skip=1
-      i=0
-      while ((i < ${#opts})); do
-        c=${opts:i:1}
-        case $c in
-        u | g | C | D | h | p | r | t | T | U | R)
-          ((i + 1 == ${#opts})) && skip=2
-          break
-          ;;
-        esac
-        ((i += 1))
-      done
-      args=("${args[@]:skip}")
-      ;;
-    *)
-      break
-      ;;
-    esac
-  done
+# Walk sudo's own options (they come before the command) to learn what kind of request this is.
+# Nothing is hidden from the popup except -A and -k, which change nothing about what runs.
+shown=() shell=0 edit=0 keepenv=0 validate=0 has_cmd=0 i=0
+if [[ $prog == sudoedit ]]; then edit=1; fi
+while ((i < ${#args[@]})); do
+  a=${args[i]}
+  case $a in
+  --)
+    shown+=("${args[@]:i}")
+    ((i + 1 < ${#args[@]})) && has_cmd=1
+    break
+    ;;
+  -A | --askpass | -k | --reset-timestamp) ;;
+  --shell | --login) shell=1 shown+=("$a") ;;
+  --edit) edit=1 shown+=("$a") ;;
+  --preserve-env | --preserve-env=*) keepenv=1 shown+=("$a") ;;
+  --validate) validate=1 shown+=("$a") ;;
+  --user | --group | --close-from | --chdir | --host | --prompt | --role | --type | --command-timeout | --other-user | --chroot)
+    shown+=("$a" "${args[i + 1]-}")
+    i=$((i + 1))
+    ;;
+  --*) shown+=("$a") ;;
+  -?*)
+    # Grouped short options (-Es); one that takes a value has it attached (-uroot) or next.
+    opts=${a#-} takes_next=0 j=0
+    while ((j < ${#opts})); do
+      c=${opts:j:1}
+      case $c in
+      s | i) shell=1 ;;
+      e) edit=1 ;;
+      E) keepenv=1 ;;
+      v) validate=1 ;;
+      u | g | C | D | h | p | r | t | T | U | R)
+        ((j + 1 == ${#opts})) && takes_next=1
+        break
+        ;;
+      esac
+      j=$((j + 1))
+    done
+    shown+=("$a")
+    if ((takes_next)); then
+      shown+=("${args[i + 1]-}")
+      i=$((i + 1))
+    fi
+    ;;
+  *)
+    shown+=("${args[@]:i}")
+    has_cmd=1
+    break
+    ;;
+  esac
+  i=$((i + 1))
+done
+
+# Quote every argument the way a shell would need it, so "a b" and a b look different and
+# control characters show up as escapes.
+command=""
+if ((${#shown[@]})); then
+  printf -v command '%q ' "${shown[@]}"
+  command=${command% }
 fi
-command="${args[*]:-}"
-[[ -n $command ]] || command="(sudo validation)"
+
+label=""
+if ((edit)); then
+  label="EDITS A FILE AS ROOT"
+elif ((shell && !has_cmd)); then
+  label="ROOT SHELL: runs whatever is typed or piped into it"
+elif ((validate && !has_cmd)); then
+  label="UNLOCKS ROOT in that terminal for several minutes, for any command"
+fi
+if ((keepenv)); then label="${label:+$label; }keeps the caller's environment variables"; fi
+if [[ -z $command ]]; then command="(no command)"; fi
+
+# Refuse what can't be shown honestly: too long for the popup, or text-direction tricks.
+((${#command} <= max_len)) ||
+  refuse "The command is ${#command} characters, too long to show in full. Put it in a script file and run that."
+for bad in $'\u202a' $'\u202b' $'\u202c' $'\u202d' $'\u202e' $'\u2066' $'\u2067' $'\u2068' $'\u2069' $'\u200e' $'\u200f'; do
+  [[ $command != *"$bad"* ]] || refuse "The command contains hidden text-direction characters."
+done
 
 # Typing guard: wait up to 30 s until there has been no input for 2 s.
 for ((n = 0; n < 300; n++)); do
   [[ -e $rundir/idle2 ]] && break
   sleep 0.1
 done
+
+text="$command"$'\n'"in $folder"
+[[ -n $label ]] && text="$label"$'\n'"$text"
 
 # Away (or locked): push to the phone, if phone alerts are set up.
 if [[ -e $rundir/away ]] || pgrep -x swaylock >/dev/null 2>&1; then
@@ -80,18 +134,23 @@ if [[ -e $rundir/away ]] || pgrep -x swaylock >/dev/null 2>&1; then
         -H "Authorization: Bearer $token" \
         -H "Title: Root access requested" \
         -H "Priority: high" \
-        -d "$command"$'\n'"in $folder" \
+        --data-raw "$text" \
         "$url/ultron-alerts" >/dev/null 2>&1 || true
     fi
   fi
 fi
 
-note_id=$(notify-send -p -u critical -a ultron "Root access requested" "$command"$'\n'"in $folder" 2>/dev/null || true)
+# mako renders Pango markup in the body: escape it so the command can't hide or style text.
+body=${text//&/&amp;}
+body=${body//</&lt;}
+body=${body//>/&gt;}
+note_id=$(notify-send -p -u critical -a ultron "Root access requested" "$body" 2>/dev/null || true)
 
 # fuzzel prints the typed password on stdout; its exit status (or timeout's) becomes ours.
 # The critical notification never times out on its own, so it is dismissed once the popup closes.
+mesg="Run as root: $command"$'\n'"in $folder"
+[[ -n $label ]] && mesg="$label"$'\n'"$mesg"
 rc=0
-timeout 600 fuzzel --dmenu --password --lines 0 --prompt "sudo ▸ " \
-  --mesg "Run as root: $command" </dev/null || rc=$?
-[[ -n $note_id ]] && makoctl dismiss -n "$note_id" >/dev/null 2>&1
+timeout 600 fuzzel --dmenu --password --lines 0 --width 80 --prompt "sudo ▸ " --mesg "$mesg" </dev/null || rc=$?
+if [[ -n $note_id ]]; then makoctl dismiss -n "$note_id" >/dev/null 2>&1 || true; fi
 exit "$rc"

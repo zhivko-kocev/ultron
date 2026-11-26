@@ -9,11 +9,11 @@ cache-duration: "24h"
 auth-file: "/var/lib/ntfy/user.db"
 auth-default-access: "deny-all"
 auth-users:
-  - "zhivko:@HASH@:user"
+  - "@USER@:@HASH@:user"
 auth-access:
-  - "zhivko:ultron-*:rw"
+  - "@USER@:ultron-*:rw"
 auth-tokens:
-  - "zhivko:@TOKEN@:ultron"
+  - "@USER@:@TOKEN@:ultron"
 
 # Needed for iOS push notifications.
 upstream-base-url: "https://ntfy.sh"

@@ -1,52 +1,100 @@
 # shellcheck shell=bash
-# step ai: ollama on the RX 580 (Vulkan), the qwen3:4b model, and omp's commit role.
+# step ai: ollama (Vulkan) with the ASK_MODEL model, when LOCAL_AI=yes; otherwise ollama is turned off.
+# This step owns /etc/systemd/system/ollama.service.d/ultron.conf; your own tuning goes in another drop-in
+# in that folder (e.g. local.conf), which no step writes.
 
-# _ai_gpu_index: Vulkan index of the RX 580 when more than one GPU is listed (empty otherwise).
+# _ai_gpu_index: the Vulkan device ollama should use, from OLLAMA_GPU (empty = no pin).
 _ai_gpu_index() {
-  local names=() i
+  local want types=() i
+  conf_var want OLLAMA_GPU
+  case $want in
+  none) return 0 ;;
+  auto) ;;
+  *)
+    if [[ "$want" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$want"
+    else
+      warn "OLLAMA_GPU='$want' isn't auto, none or a device number: ollama picks its own GPU"
+    fi
+    return 0
+    ;;
+  esac
   have vulkaninfo || return 0
-  mapfile -t names < <(vulkaninfo --summary 2>/dev/null | sed -n -E 's/^[[:space:]]*deviceName[[:space:]]*=[[:space:]]*(.*)$/\1/p')
-  ((${#names[@]} > 1)) || return 0
-  for i in "${!names[@]}"; do
-    if [[ "${names[$i]^^}" =~ RX[[:space:]]*580|POLARIS ]]; then
+  mapfile -t types < <(vulkaninfo --summary 2>/dev/null | sed -n -E 's/^[[:space:]]*deviceType[[:space:]]*=[[:space:]]*([A-Z_]+).*/\1/p' || true)
+  ((${#types[@]} > 1)) || return 0
+  for i in "${!types[@]}"; do
+    if [[ "${types[$i]}" == PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ]]; then
       printf '%s\n' "$i"
       return 0
     fi
   done
-  warn "More than one GPU, but none is an RX 580: ollama picks its own (${names[*]})"
+  warn "More than one Vulkan device but no discrete GPU: ollama picks its own (set OLLAMA_GPU to a number to choose)"
+}
+
+_ai_off() {
+  if systemctl list-unit-files ollama.service >/dev/null 2>&1 && systemctl is-enabled -q ollama 2>/dev/null; then
+    say "LOCAL_AI isn't yes: turning ollama off"
+    sudo systemctl disable --now ollama
+  else
+    echo "  LOCAL_AI isn't yes: no local model (ultron conf set LOCAL_AI yes to add one)"
+  fi
 }
 
 step_ai() {
-  local dropin=/etc/systemd/system/ollama.service.d/ultron.conf idx tmp
-  say "Letting ollama use the GPU (render and video groups)"
-  sudo usermod -aG render,video ollama
+  local local_ai model dropin=/etc/systemd/system/ollama.service.d/ultron.conf idx tmp changed=0
+  conf_var local_ai LOCAL_AI
+  if [[ "$local_ai" != yes ]]; then
+    _ai_off
+    return 0
+  fi
+  have ollama || die "ollama isn't installed: run ultron install packages ai"
+  model=$(ask_model)
+
+  if ! id -nG ollama 2>/dev/null | tr ' ' '\n' | grep -qx render; then
+    say "Letting ollama use the GPU (render and video groups)"
+    sudo usermod -aG render,video ollama
+    changed=1
+  fi
 
   idx=$(_ai_gpu_index)
   tmp=$(mktemp)
   cat "$ULTRON_ROOT/system/etc/systemd/system/ollama.service.d/ultron.conf" >"$tmp"
   if [[ -n "$idx" ]]; then
-    say "Pinning ollama to Vulkan device $idx (the RX 580)"
+    say "Pinning ollama to Vulkan device $idx"
     printf 'Environment=GGML_VK_VISIBLE_DEVICES=%s\n' "$idx" >>"$tmp"
   fi
-  install_root "$tmp" "$dropin" 0644
+  if ! cmp -s "$tmp" "$dropin"; then
+    install_root "$tmp" "$dropin" 0644
+    sudo systemctl daemon-reload
+    changed=1
+  fi
   rm -f "$tmp"
 
-  say "Starting ollama"
-  sudo systemctl daemon-reload
   sudo systemctl enable ollama
-  sudo systemctl restart ollama
+  # A restart kills running `ask` and commit calls: only when its settings changed.
+  if ((changed)); then
+    say "Restarting ollama (its settings changed)"
+    sudo systemctl restart ollama
+  else
+    sudo systemctl start ollama
+  fi
   local i
   for ((i = 0; i < 30; i++)); do
-    curl -fs http://127.0.0.1:11434/api/version >/dev/null 2>&1 && break
+    if curl -fs http://127.0.0.1:11434/api/version >/dev/null 2>&1; then break; fi
     sleep 1
   done
   curl -fs http://127.0.0.1:11434/api/version >/dev/null 2>&1 || die "ollama didn't answer on 127.0.0.1:11434 (journalctl -u ollama)."
 
   if [[ "${ULTRON_SKIP_MODEL:-0}" == 1 ]]; then
-    warn "ULTRON_SKIP_MODEL=1: not pulling qwen3:4b"
-  else
-    say "Pulling qwen3:4b (about 2.5 GB)"
-    ollama pull qwen3:4b || die "ollama pull failed; rerun: ultron install ai"
+    warn "ULTRON_SKIP_MODEL=1: not pulling $model"
+    return 0
   fi
-  set_omp_settings
+  say "Pulling $model"
+  if ! ollama pull "$model"; then
+    if ollama list 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qxF -- "$model"; then
+      warn "ollama pull failed; keeping the $model already here"
+    else
+      die "ollama pull $model failed; check ASK_MODEL (ultron conf get ASK_MODEL), then rerun: ultron install ai"
+    fi
+  fi
 }

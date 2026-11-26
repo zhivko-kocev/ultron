@@ -1,4 +1,4 @@
-# sway desktop, audio, files, viewers, fonts, GPU (official repos)
+# sway desktop, audio, files, viewers, fonts, Mesa (official repos)
 sway
 swaybg
 swayidle
@@ -37,4 +37,3 @@ noto-fonts-emoji
 ttf-jetbrains-mono
 adwaita-icon-theme
 mesa
-vulkan-radeon

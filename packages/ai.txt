@@ -1,3 +1,3 @@
-# Local AI on the RX 580 through Vulkan (official repos)
+# Local AI: ollama with its Vulkan backend (official repos)
 ollama
 ollama-vulkan

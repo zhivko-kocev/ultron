@@ -1,5 +1,10 @@
 # shellcheck shell=bash
-# ultron doctor [--deep]: check the whole system; exit 1 on any FAIL.
+# ultron doctor [--root] [--deep]: check the whole system; exit 1 on any FAIL.
+# No sudo by default, so agents can run it without a password popup. --root adds the checks that need
+# root (boot menu, snapshots); --deep implies --root and also asks the local model.
+
+# shellcheck source=install.sh
+source "$ULTRON_ROOT/lib/cmd/install.sh"
 
 _D_FAILS=0 _D_WARNS=0
 
@@ -19,19 +24,6 @@ _check() {
   local desc=$1
   shift
   if "$@" >/dev/null 2>&1; then _pass "$desc"; else _fail "$desc"; fi
-}
-
-# _vm_soft DESC CMD...: like _check, but WARN instead of FAIL inside a VM.
-_vm_soft() {
-  local desc=$1
-  shift
-  if "$@" >/dev/null 2>&1; then
-    _pass "$desc"
-  elif is_vm; then
-    _warnl "$desc (VM)"
-  else
-    _fail "$desc"
-  fi
 }
 
 _root_on_luks() {
@@ -55,76 +47,87 @@ _askpass_ok() {
 
 _snapper_has_entries() {
   local n
-  n=$(sudo snapper -c root --csvout list --columns number 2>/dev/null | awk -F, 'NR > 1 && $1 > 0' | wc -l)
+  n=$({ sudo snapper -c root --csvout list --columns number 2>/dev/null || true; } | awk -F, 'NR > 1 && $1 > 0' | wc -l)
   ((n >= 1))
 }
 
-# _expected_links REPO PACKAGE...: home-relative paths every package file should appear at.
-_expected_links() {
-  local repo=$1 pkg f
-  shift
-  for pkg in "$@"; do
-    [[ -d "$repo/$pkg" ]] || continue
+# _check_links: every file of ultron's own home/* packages appears in ~ as a link into the checkout.
+_check_links() {
+  local ur rel real bad=() total=0 d f
+  ur=$(readlink -f "$ULTRON_ROOT")
+  for d in "$ur"/home/*/; do
     while IFS= read -r -d '' f; do
-      printf '%s\n' "${f#"$repo/$pkg/"}"
-    done < <(find "$repo/$pkg" -type f ! -name '.stow-local-ignore' ! -path '*/.git/*' -print0)
+      rel=${f#"$d"}
+      total=$((total + 1))
+      real=$(readlink -f "$HOME/$rel" 2>/dev/null || true)
+      if [[ -z "$real" || ! -e "$real" || "$real" != "$ur/"* ]]; then bad+=("$rel"); fi
+    done < <(find "$d" -type f ! -name '.stow-local-ignore' -print0)
   done
+  if ((${#bad[@]} == 0)); then
+    _pass "stow links: all $total resolve into $ur"
+  else
+    _fail "stow links: ${#bad[@]} of $total don't resolve into $ur (rerun ultron install desktop): ${bad[*]:0:10}"
+  fi
 }
 
-_check_links() {
-  local ur dr rel real bad=() total=0 pkgs=() d
-  ur=$(readlink -f "$HOME/Projects/ultron")
-  dr=$(readlink -f "$HOME/Projects/dotfiles" 2>/dev/null || printf '%s' "$HOME/Projects/dotfiles")
-  for d in "$ur"/home/*/; do
-    d=${d%/}
-    pkgs+=("${d##*/}")
+_check_generated() {
+  local f missing=()
+  for f in "$ULTRON_GEN"/{sway.conf,foot.ini,fuzzel.ini,colors,swayidle} "$HOME/.config/mako/config" "$HOME/.config/swaylock/config"; do
+    [[ -s "$f" ]] || missing+=("${f/#"$HOME"/\~}")
   done
-  local list
-  list=$(_expected_links "$ur/home" "${pkgs[@]}")
-  if [[ -d "$dr" ]]; then list+=$'\n'$(_expected_links "$dr" zsh git mise agents zed); fi
-  while IFS= read -r rel; do
-    [[ -n "$rel" ]] || continue
-    total=$((total + 1))
-    real=$(readlink -f "$HOME/$rel" 2>/dev/null || true)
-    if [[ -z "$real" || ! -e "$real" ]] || [[ "$real" != "$ur/"* && "$real" != "$dr/"* ]]; then
-      bad+=("$rel")
-    fi
-  done <<<"$list"
-  if ((${#bad[@]} == 0)); then
-    _pass "stow links: all $total resolve into the repos"
+  if ((${#missing[@]} == 0)); then
+    _pass "generated config files exist"
   else
-    _fail "stow links: ${#bad[@]} of $total don't resolve into the repos (rerun ultron install desktop dotfiles): ${bad[*]:0:10}"
+    _fail "generated config files missing (run ultron apply): ${missing[*]}"
   fi
+}
+
+_check_boss() {
+  local boss
+  boss=$(boss_kind)
+  read -r boss _ <<<"$boss"
+  if have "$boss"; then _pass "boss command '$boss' exists"; else _fail "boss command '$boss' isn't installed (ultron conf set BOSS omp, or install it)"; fi
 }
 
 _check_docker() {
   local opts
   opts=$(DOCKER_HOST=${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock} docker info --format '{{.SecurityOptions}}' 2>/dev/null || true)
   if [[ "$opts" == *rootless* ]]; then _pass "Docker is rootless"; else _fail "Docker is rootless (docker info: ${opts:-no answer})"; fi
-  if id -nG | tr ' ' '\n' | grep -qx docker; then
-    _fail "$ULTRON_USER is in the docker group"
+  if id -nG "$ULTRON_USER" | tr ' ' '\n' | grep -qx docker; then
+    _fail "$ULTRON_USER is in the docker group (root-equivalent): sudo gpasswd -d $ULTRON_USER docker"
   else
     _pass "not in the docker group"
   fi
 }
 
 _check_ai() {
+  local local_ai model role
+  conf_var local_ai LOCAL_AI
+  if [[ "$local_ai" != yes ]]; then
+    _info "local AI is off (LOCAL_AI=$local_ai)"
+    return 0
+  fi
+  model=$(ask_model)
   _check "ollama is active" systemctl is-active -q ollama
-  if ollama list 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qx 'qwen3:4b'; then
-    _pass "qwen3:4b is pulled"
+  if { ollama list 2>/dev/null || true; } | awk 'NR > 1 { print $1 }' | grep -qxF -- "$model"; then
+    _pass "$model is pulled"
   else
-    _fail "qwen3:4b is pulled (ultron install ai)"
+    _fail "$model is pulled (ultron install ai)"
   fi
-  local role
-  role=$(omp config get modelRoles 2>/dev/null | jq -r '.commit // ""' 2>/dev/null || true)
-  if [[ "$role" == ollama/* ]]; then
-    _pass "omp commit role starts with ollama/"
-  else
-    _warnl "omp commit role is '${role:-unset}', not ollama/ first (ultron install ai sets it again)"
+  if have omp; then
+    role=$(omp config get modelRoles 2>/dev/null | jq -r '.commit // ""' 2>/dev/null || true)
+    if [[ "$role" == ollama/* ]]; then
+      _pass "omp commit role starts with ollama/"
+    else
+      _warnl "omp commit role is '${role:-unset}', not ollama/ first (ultron install agents sets it again)"
+    fi
   fi
+}
+
+_check_idle_inhibitors() {
   # swayidle turns off all its timeouts while any logind idle inhibitor is held (typing guard, away, lock).
   local idle_blockers
-  idle_blockers=$(systemd-inhibit --list --no-pager --no-legend 2>/dev/null |
+  idle_blockers=$({ systemd-inhibit --list --no-pager --no-legend 2>/dev/null || true; } |
     awk '$6 ~ /(^|:)idle(:|$)/ && $NF == "block" { print $5 }' | sort -u | paste -sd, - || true)
   if [[ -z "$idle_blockers" ]]; then
     _pass "no idle inhibitor turns off swayidle"
@@ -135,45 +138,78 @@ _check_ai() {
 
 _check_jocasta() {
   local v pin want
-  if v=$(jocasta --version 2>/dev/null); then
-    _info "jocasta: $v"
-  else
-    _info "jocasta isn't installed (ultron install jocasta)"
+  if [[ ! -e "$HOME/.local/bin/jocasta" ]]; then
+    _info "Jocasta isn't set up (optional: ultron install jocasta)"
+    return 0
   fi
-  pin=$(sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' /etc/mise/conf.d/ultron-tools.toml 2>/dev/null | head -n1)
-  want=$(grep -oE 'checked against omp [0-9]+(\.[0-9]+)*' "$JOCASTA_DIR/README.md" 2>/dev/null | head -n1 | grep -oE '[0-9]+(\.[0-9]+)*$' || true)
+  if v=$("$HOME/.local/bin/jocasta" --version 2>/dev/null); then
+    _pass "jocasta runs: $v"
+  else
+    _fail "jocasta --version fails (ultron install jocasta)"
+  fi
+  pin=$(omp_pin)
+  want=$(jocasta_omp_want)
   if [[ -n "$want" ]]; then
     if [[ "$pin" == "$want" ]]; then _info "omp pin $pin matches Jocasta"; else _info "omp pin ${pin:-unset} differs from Jocasta's $want (ultron install jocasta)"; fi
   fi
 }
 
 _check_net() {
-  if is_vm; then
-    if tailscale status >/dev/null 2>&1; then _pass "tailscale status"; else _warnl "tailscale status (VM)"; fi
-  elif ! systemctl is-enabled -q tailscaled 2>/dev/null; then
-    _warnl "Tailscale isn't set up yet (ultron install net)"
+  if ! systemctl is-enabled -q tailscaled 2>/dev/null; then
+    _info "Tailscale isn't set up (optional: ultron install net)"
   else
     _check "tailscale status" tailscale status
   fi
-  if [[ ! -e "$NTFY_ENV" ]] && ! is_vm; then
-    _warnl "ntfy isn't set up yet (ultron install ntfy)"
+  if [[ ! -e "$NTFY_ENV" ]]; then
+    _info "phone alerts aren't set up (optional: ultron install ntfy)"
   else
-    _vm_soft "ntfy /v1/health answers" curl -fsS --max-time 3 http://127.0.0.1:2586/v1/health
+    _check "ntfy /v1/health answers" curl -fsS --max-time 3 http://127.0.0.1:2586/v1/health
   fi
 }
 
-_check_gpu() {
-  local cards
-  cards=$(find /sys/class/drm -maxdepth 1 -name 'card[0-9]' | wc -l)
-  if sudo dmesg 2>/dev/null | grep -qi 'Fatal error during GPU init'; then
-    _info "amdgpu reported 'Fatal error during GPU init' (iGPU down; CSM on?)"
-  fi
-  if ((cards >= 2)); then
-    _info "GPUs: $cards cards in /sys/class/drm (iGPU up)"
-  elif is_vm; then
-    _warnl "GPUs: $cards card (VM)"
+# _spec_present SPEC: a block device matches LABEL=x, UUID=x or /dev/x (no root needed).
+_spec_present() {
+  case $1 in
+  /dev/*) [[ -b "$1" ]] ;;
+  LABEL=* | UUID=*)
+    lsblk -J -o UUID,LABEL 2>/dev/null |
+      jq -e --arg k "${1%%=*}" --arg v "${1#*=}" \
+        '[.. | objects | select(($k == "UUID" and .uuid == $v) or ($k == "LABEL" and .label == $v))] | length > 0' >/dev/null
+    ;;
+  *) return 1 ;;
+  esac
+}
+
+# _check_mounts: MOUNTS entries mounted; any ultron-migration-* copy lying around is a plaintext copy of a home.
+_check_mounts() {
+  local spec mp roots=() r d
+  while read -r -u 3 spec mp; do
+    [[ -n "$spec" ]] || continue
+    roots+=("$mp")
+    if mountpoint -q "$mp"; then
+      _pass "$mp is mounted ($spec)"
+    elif ! _spec_present "$spec"; then
+      _warnl "$mp: no disk matches $spec (not connected?)"
+    else
+      _fail "$mp isn't mounted ($spec is connected; ultron install system)"
+    fi
+  done 3< <(conf_mounts)
+  for d in /mnt/*/; do
+    if [[ -d "$d" ]]; then roots+=("${d%/}"); fi
+  done
+  ((${#roots[@]})) || return 0
+  while IFS= read -r -d '' d; do
+    _warnl "$d is a plaintext copy of a home folder: delete it once checked (ultron migrate clean --from ${d%/*})"
+  done < <(for r in "${roots[@]}"; do find "$r" -mindepth 1 -maxdepth 1 -type d -name 'ultron-migration-*' -print0 2>/dev/null || true; done | sort -zu)
+}
+
+_check_checkout() {
+  local changes
+  changes=$(git -C "$ULTRON_ROOT" status --porcelain 2>/dev/null || echo "not a git checkout")
+  if [[ -z "$changes" ]]; then
+    _pass "ultron checkout is clean"
   else
-    _info "GPUs: only $cards card in /sys/class/drm (the iGPU isn't up)"
+    _warnl "ultron checkout has local changes, so ultron update doesn't pull (updates are paused): git -C $ULTRON_ROOT status"
   fi
 }
 
@@ -186,7 +222,7 @@ _check_disk() {
 _check_session() {
   if [[ -n "${SWAYSOCK:-}" ]]; then
     _check "ultron-attentiond is active" systemctl --user is-active -q ultron-attentiond
-    if systemctl --user show-environment 2>/dev/null | grep -q '^WAYLAND_DISPLAY='; then
+    if { systemctl --user show-environment 2>/dev/null || true; } | grep -q '^WAYLAND_DISPLAY='; then
       _pass "user manager has WAYLAND_DISPLAY"
     else
       _fail "user manager has WAYLAND_DISPLAY"
@@ -197,49 +233,63 @@ _check_session() {
   fi
 }
 
+_check_root() {
+  sudo -v || die "--root needs sudo."
+  _check "/boot/limine.conf has a kernel entry" sudo grep -qE "$LIMINE_KERNEL_RE" /boot/limine.conf
+  _check "snapper has at least one snapshot of /" _snapper_has_entries
+}
+
 _check_deep() {
-  local out
+  local out local_ai
+  conf_var local_ai LOCAL_AI
+  if [[ "$local_ai" != yes ]]; then
+    _info "--deep: local AI is off, nothing to ask"
+    return 0
+  fi
   out=$(timeout 120 ask "say ok" 2>/dev/null || true)
   if [[ -n "$out" ]]; then _pass "ask \"say ok\" answered"; else _fail "ask \"say ok\" answered"; fi
-  if ollama ps 2>/dev/null | grep -q '100% GPU'; then
+  if { ollama ps 2>/dev/null || true; } | grep -q '100% GPU'; then
     _pass "ollama runs 100% on the GPU"
   elif is_vm; then
     _warnl "ollama isn't 100% GPU (VM: CPU is expected)"
   else
-    _fail "ollama runs 100% on the GPU ($(ollama ps 2>/dev/null | tail -n +2 | head -n1))"
+    _warnl "ollama doesn't run 100% on the GPU ($({ ollama ps 2>/dev/null || true; } | sed -n 2p)); see OLLAMA_GPU"
   fi
 }
 
 cmd_doctor() {
-  local deep=0
-  case ${1:-} in
-  --deep) deep=1 ;;
-  "") ;;
-  *) die "usage: ultron doctor [--deep]" ;;
-  esac
-  sudo -v || die "doctor needs sudo for some checks."
+  local root=0 deep=0 a
+  for a in "$@"; do
+    case $a in
+    --root) root=1 ;;
+    --deep) root=1 deep=1 ;;
+    *) die "usage: ultron doctor [--root] [--deep]" ;;
+    esac
+  done
 
   _check "UEFI boot" is_uefi
   _check "root is on LUKS" _root_on_luks
-  _check "/boot/limine.conf has a kernel entry" sudo grep -qE '^[[:space:]]*(kernel_)?path:[[:space:]]*boot\(\)' /boot/limine.conf
   _check "limine-snapper-sync.service is enabled" systemctl is-enabled -q limine-snapper-sync.service
-  _check "snapper has at least one snapshot of /" _snapper_has_entries
   _check "greetd autologin names $ULTRON_USER" _greetd_autologin
   _check "askpass is root-owned and wired into sudo.conf" _askpass_ok
+  _check "ufw is active" systemctl is-active -q ufw
   _check_links
+  _check_generated
+  _check_boss
   _check_docker
   _check_ai
+  _check_idle_inhibitors
   _check_jocasta
   _check_net
-  _check "ufw is active" sh -c 'sudo ufw status | grep -q "Status: active"'
-  if is_vm; then
-    _warnl "$SSD_MOUNT: skipped (VM)"
-  else
-    _check "$SSD_MOUNT is mounted" mountpoint -q "$SSD_MOUNT"
-  fi
-  _check_gpu
+  _check_mounts
+  _check_checkout
   _check_disk
   _check_session
+  if ((root)); then
+    _check_root
+  else
+    _info "boot menu and snapshot checks need root: ultron doctor --root (--deep also asks the local model)"
+  fi
   if ((deep)); then _check_deep; fi
 
   echo

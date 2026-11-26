@@ -1,0 +1,14 @@
+# Agent CLIs that `ultron agent` knows. Tab-separated columns:
+#   name  mise-tool  binary  guide
+# mise-tool: what `mise use -g` installs ("-" = installed some other way).
+# guide: where the agent reads global instructions, so it learns about ultron:
+#   skills:DIR  reads skills from DIR (the ultron skill is linked as DIR/ultron)
+#   link:DIR    DIR becomes a link to ~/.agents/skills/ultron
+#   block:FILE  FILE gets a short ultron block between <!-- ultron:begin --> and <!-- ultron:end -->
+#   -           nothing
+# Your own ~/.config/ultron/agents.tsv has the same columns, is read after this file and wins by name.
+omp	oh-my-pi	omp	skills:~/.agents/skills
+claude	npm:@anthropic-ai/claude-code	claude	link:~/.claude/skills/ultron
+codex	npm:@openai/codex	codex	block:~/.codex/AGENTS.md
+gemini	npm:@google/gemini-cli	gemini	block:~/.gemini/GEMINI.md
+opencode	npm:opencode-ai	opencode	block:~/.config/opencode/AGENTS.md

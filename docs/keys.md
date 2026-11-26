@@ -1,9 +1,10 @@
 Super+Return — Terminal (foot)
-Super+Shift+Return — Chrome
-Super+Shift+B — Chrome
+Super+Shift+Return — Browser
+Super+Shift+B — Browser
 Super+Shift+F — Files (Thunar)
 Super+Shift+N — Workspace 5 and Zed
 Super+Space — App launcher (fuzzel)
+Super+Alt+Space — ultron menu: install apps and tools, settings, theme, update, and more
 Super+Escape — Power menu: lock, suspend, log out, reboot, reboot to BIOS, shut down
 Super+K — This key cheat sheet
 Super+W — Close window (asks first for the boss window: closing it stops every thread)
@@ -38,6 +39,7 @@ Print — Region screenshot into swappy
 Shift+Print — Full-screen screenshot to file and clipboard
 Volume keys — Volume up / down, mute
 Media keys — Play/pause, next, previous
+Brightness keys — Screen brightness up / down
 Super+B — Boss: jump to workspace 1 with the boss pane selected
 Super+Backspace — Back to where you were before the last jump
 Super+A — Attention: the boss if it needs you, else the latest urgent window

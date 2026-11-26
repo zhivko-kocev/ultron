@@ -5,7 +5,7 @@ A lightweight Arch Linux desktop built for working with coding agents. Install i
 - **Agent-first.** One agent, the boss, lives on workspace 1. Agents show you diffs, web pages, files and running terminals on their own workspaces, and ultron brings you to an agent only when it needs you *and* you've stopped typing. Away from the desk, the question goes to your phone.
 - **Any agent.** [omp](https://github.com/can1357/oh-my-pi) ships by default; Claude Code, Codex, Gemini CLI and opencode are one command away, and any other CLI can be added. [Jocasta](https://github.com/zhivko-kocev/jocasta) is supported as a multi-thread boss.
 - **Safe enough to let agents work.** Root needs your password in a popup that shows the exact command, every time. Docker is rootless. The disk is encrypted. Every package change has a snapshot you can boot.
-- **Light.** sway, foot, fuzzel, mako and a bash status bar: about 570 MB of RAM at an idle desktop ([measured](docs/baseline.md)). No daemons you didn't ask for.
+- **Light.** sway, foot, fuzzel, mako and a bash status bar: about 600 MB of RAM at an idle desktop before any agent starts ([measured](docs/baseline.md)). No daemons you didn't ask for.
 - **Yours.** One menu for everything (Super+Alt+Space), six themes, and a `~/.config/ultron/` folder where your settings, keys, packages and overrides live without forking anything.
 
 ## Install

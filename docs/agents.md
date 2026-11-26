@@ -30,15 +30,19 @@ ultron agent remove codex
 
 `add` installs the agent with mise (`mise use -g <tool>@latest`), checks it runs, and puts the ultron guide where that agent reads its global instructions:
 
-| Agent | Installed as | Guide written to |
+| Agent | mise tool | Guide written to |
 |---|---|---|
 | omp | ships with ultron | `~/.agents/skills/ultron` (already there) |
-| claude | `npm:@anthropic-ai/claude-code` | `~/.claude/skills/ultron`, a link to `~/.agents/skills/ultron` |
-| codex | `npm:@openai/codex` | a block in `~/.codex/AGENTS.md` |
-| gemini | `npm:@google/gemini-cli` | a block in `~/.gemini/GEMINI.md` |
-| opencode | `npm:opencode-ai` | a block in `~/.config/opencode/AGENTS.md` |
+| claude | `claude` | `~/.claude/skills/ultron`, a link to `~/.agents/skills/ultron` |
+| codex | `codex` | a block in `~/.codex/AGENTS.md` |
+| gemini | `gemini` | a block in `~/.gemini/GEMINI.md` |
+| opencode | `opencode` | a block in `~/.config/opencode/AGENTS.md` |
+
+Installing all four and running `--version` was tested. The guide locations follow each agent's documentation at the time of writing and were not tested with a signed-in agent: if yours doesn't seem to know about ultron, tell it to run `ultron guide`, and fix the location in `~/.config/ultron/agents.tsv` (below).
 
 A block is two lines between `<!-- ultron:begin -->` and `<!-- ultron:end -->`; the rest of the file is never touched, and `remove` takes only the block out. A real folder where a link would go is left alone. `remove` also uninstalls the tool, and if the agent was the boss, sets the boss back to omp.
+
+Tools installed this way are listed in your mise config (`~/.config/mise/config.toml`). If your dotfiles track that file, `add` and `remove` change it there.
 
 ## Running an agent with the safe sudo
 

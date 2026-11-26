@@ -22,6 +22,8 @@ wget
 rsync
 python
 pacman-contrib
+# OpenSSL 3 beside Arch's 4.x: stremio-service (AUR) only builds against 3.x
+openssl-3
 snapper
 snap-pac
 btrfs-progs

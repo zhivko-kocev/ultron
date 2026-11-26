@@ -13,9 +13,15 @@ step_aur() {
     }
     rm -rf "$tmp"
   fi
-  local pkgs=()
+  local pkgs=() p rest=() yayopts=(--needed --noconfirm --answerdiff None --answerclean None --removemake)
   mapfile -t pkgs < <(list_packages "$ULTRON_ROOT/packages/aur.txt")
   say "Installing ${#pkgs[@]} AUR packages with yay (the Limine tools download GraalVM; stremio-service builds Rust)"
-  yay -S --needed --noconfirm --answerdiff None --answerclean None --removemake "${pkgs[@]}" ||
+  for p in "${pkgs[@]}"; do [[ $p == stremio-service ]] || rest+=("$p"); done
+  yay -S "${yayopts[@]}" "${rest[@]}" ||
     die "An AUR build failed: rerun ultron install aur (see docs/migrate.md for the Limine tools and docker-rootless-extras contingencies)."
+  if ((${#rest[@]} < ${#pkgs[@]})); then
+    # Its openssl-sys only builds against OpenSSL 1.1/3.x; Arch's openssl is 4.x, openssl-3 sits beside it.
+    PKG_CONFIG_PATH=/usr/lib/openssl-3/pkgconfig yay -S "${yayopts[@]}" stremio-service ||
+      die "Building stremio-service failed: rerun ultron install aur."
+  fi
 }

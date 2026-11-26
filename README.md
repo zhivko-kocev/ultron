@@ -57,6 +57,8 @@ On any Arch host with KVM:
     vm/ultron-vm run --iso     # boot the installer (then run the bootstrap line above)
     vm/ultron-vm run           # boot the installed system (--nogl if graphics misbehave)
     vm/ultron-vm serve         # serve a Jocasta build to the VM at http://10.0.2.2:8765
+    vm/ultron-vm type 'ls\n'   # type into the VM; `key ctrl-alt-f2` presses keys; `shot f.png` (needs --nogl)
+    vm/ultron-vm ssh [cmd]     # ssh to the VM on 127.0.0.1:2222 (needs sshd and ~/.local/share/ultron-vm/id_vm.pub in the VM)
     vm/ultron-vm destroy
 
 In the VM, install Jocasta from the host's build with `ULTRON_JOCASTA_FROM=http://10.0.2.2:8765 ultron install jocasta`.

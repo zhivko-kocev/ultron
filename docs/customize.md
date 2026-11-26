@@ -19,7 +19,7 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 
 ## Settings
 
-`ultron conf` lists every setting with its value; `ultron conf set KEY VALUE` changes one and applies it. Most also have an entry under **Setup** in the menu (Super+Alt+Space).
+`ultron conf` lists every setting with its value; `ultron conf set KEY VALUE` changes one and applies it (`ultron conf set KEY ""` goes back to the default). Most also have an entry under **Setup** in the menu (Super+Alt+Space).
 
 | Setting | Default | What it does |
 |---|---|---|

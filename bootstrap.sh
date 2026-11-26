@@ -78,10 +78,18 @@ valid_host() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; }
 valid_tz() { [[ "$1" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ && -f "/usr/share/zoneinfo/$1" ]]; }
 valid_kb() { [[ "$1" =~ ^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$ ]]; }
 
+# detect_timezone: a guess from the public IP address (these services rate-limit, so several are tried).
+# It is only the default of a question, and only a name that exists in /usr/share/zoneinfo is used.
 detect_timezone() {
-  local tz
-  tz=$(curl -fsS --max-time 5 https://ipapi.co/timezone 2>/dev/null || true)
-  if valid_tz "$tz"; then printf '%s\n' "$tz"; else printf 'UTC\n'; fi
+  local url tz
+  for url in https://ipapi.co/timezone https://ipinfo.io/timezone 'http://ip-api.com/line?fields=timezone'; do
+    tz=$(curl -fsS --max-time 4 "$url" 2>/dev/null || true)
+    if valid_tz "$tz"; then
+      printf '%s\n' "$tz"
+      return 0
+    fi
+  done
+  printf 'UTC\n'
 }
 
 # console_keymap LAYOUTS: the console keymap for the first XKB layout ("us" when kbd has none).

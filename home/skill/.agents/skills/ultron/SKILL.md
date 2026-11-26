@@ -24,20 +24,21 @@ This PC runs ultron (Arch + sway). The user works on numbered workspaces; you ma
 
 ## Root access
 
-10. Run `sudo <cmd>` normally. The user sees a password popup with the exact command and the folder it runs in. If it is refused or times out (sudo says no password was provided), do not retry in a loop: tell the user what you needed and why.
+10. Run `sudo <cmd>` normally. The user sees a password popup with the exact command and the folder it runs in, once per command (nothing is cached), so put related root work in one script and run that. If it is refused or times out (sudo says no password was provided), do not retry in a loop: tell the user what you needed and why.
+11. To install or remove a system package use `ultron pkg install NAME…` / `ultron pkg remove NAME…` (official repos and AUR): it also records the package so a reinstall of the machine brings it back. Languages and runtimes: `ultron dev add TOOL` (no root).
 
 ## Containers
 
-11. Docker is rootless: `docker`, `docker compose` and `docker buildx bake` work. Ports below 1024 can't be bound, and containers have no access to the host's root.
+12. Docker is rootless: `docker`, `docker compose` and `docker buildx bake` work. Ports below 1024 can't be bound, and containers have no access to the host's root.
 
 ## Local model
 
-12. For cheap, private chores (summaries, commit-message drafts, classification), use `ask "…"` (piped input works: `git diff | ask "summarise"`) or the API at `http://127.0.0.1:11434`. The model name and whether local AI is on come from `ultron info`.
+13. For cheap, private chores (summaries, commit-message drafts, classification), use `ask "…"` (piped input works: `git diff | ask "summarise"`) or the API at `http://127.0.0.1:11434`. The model name and whether local AI is on come from `ultron info`.
 
 ## Checking the machine
 
-13. `ultron doctor` is safe to run: it never asks for a password and changes nothing. Use it when something on the system seems broken.
+14. `ultron doctor` is safe to run: it never asks for a password and changes nothing. Use it when something on the system seems broken.
 
 ## Jocasta
 
-14. When the boss is Jocasta, the user's notes about its friction are in `~/.local/share/ultron/jocasta-notes.md`.
+15. When the boss is Jocasta, the user's notes about its friction are in `~/.local/share/ultron/jocasta-notes.md`.

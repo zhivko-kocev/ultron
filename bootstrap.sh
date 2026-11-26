@@ -237,7 +237,9 @@ finish() {
     echo "warn: nothing is mounted at /mnt; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
   else
     say "Cloning ultron into the new system"
-    arch-chroot /mnt runuser -u "$USER_NAME" -- git clone "$REPO_URL" "/home/$USER_NAME/Projects/ultron" ||
+    # runuser keeps root's HOME, and git then fails reading /root/.gitconfig: give it the user's.
+    arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="/home/$USER_NAME" \
+      git clone "$REPO_URL" "/home/$USER_NAME/Projects/ultron" ||
       echo "warn: the clone failed; after reboot run: git clone $REPO_URL ~/Projects/ultron" >&2
     printf 'Next: run ~/Projects/ultron/bin/ultron install\n' >/mnt/etc/motd
     printf 'KEYMAP=us\nFONT=default8x16\n' >/mnt/etc/vconsole.conf

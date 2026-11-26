@@ -23,5 +23,5 @@ This records how much the machine uses when nothing is happening. There is no pa
 
 | Where | Date | Kernel | `free -m` used / available (MiB) | jocasta CPU % / RSS (MiB) | boss omp CPU % / RSS (MiB) | Notes |
 |---|---|---|---|---|---|---|
-| VM (Phase B) | | | | | | |
+| VM (Phase B) | 2026-11-26 | 7.3.6-arch1-1 | 572 / 5337 (desktop only: Jocasta closed, model unloaded); 4454 / 1454 with Jocasta running (boss, 3 startup reviews, qwen3:4b loaded on the CPU, 3.3 GB) | 0.2 / 27 | 0.2 / 280 | QEMU/KVM, 6 vCPU, 5.9 GiB, no GPU. With no cloud login, the boss and Jocasta's startup reviews ran on the local model. omp's own `omp daemon` (83 MiB) and tiny-inference worker (70 MiB) stay running after Jocasta closes |
 | Real machine (Phase C) | | | | | | |

@@ -12,14 +12,14 @@ Welcome to ultron.
   Super+Space       open an app            Super+Return   a terminal
   Super+1 … 0       go to a workspace      Super+W        close a window
 
-Workspace 1 holds your boss agent ($boss). Sign it in once: press Super+B,
-click into it and type /login (omp and claude; other agents print their own
-sign-in steps).
+Workspace 1 holds your boss agent ($boss); Super+B takes you there. The first
+time, sign it in: omp asks by itself, in claude type /login, other agents
+print their own steps.
 
 Wi-Fi, Bluetooth, sound, screens, keyboard layout, browser, git identity
 and time zone: menu, then Setup.
 
-More agents (claude, codex, gemini, …), languages (node, python, go, rust, …),
+More agents (claude, codex, gemini, …), languages (node, python, go, …),
 apps and web apps: menu, then Install.
 
 Keep everything current:   ultron update
@@ -29,6 +29,7 @@ Your settings live in ~/.config/ultron/ (ultron conf edit opens them).
 How to change anything:    $ULTRON_ROOT/docs/customize.md
 
 Show this again any time:  ultron welcome
+Close this window:         Super+W
 EOF
 }
 

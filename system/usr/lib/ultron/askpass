@@ -9,6 +9,13 @@ set -euo pipefail
 
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
+# fuzzel rejects the prompt and the command text in a non-UTF-8 locale (an agent may run with LANG unset).
+case ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} in
+*[Uu][Tt][Ff]-8* | *[Uu][Tt][Ff]8*) ;;
+*)
+  if [[ -n ${LC_ALL:-} ]]; then export LC_ALL=C.UTF-8; else export LC_CTYPE=C.UTF-8; fi
+  ;;
+esac
 rundir=$XDG_RUNTIME_DIR/ultron
 ntfy_env=/etc/ultron/ntfy.env
 max_len=600

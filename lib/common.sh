@@ -303,7 +303,7 @@ confirm() {
 
 # term_run [--hold] [--title T] -- CMD...: run CMD in a floating terminal (app_id ultron-float).
 term_run() {
-  local args=(--app-id=ultron-float)
+  local args=(--app-id=ultron-float --window-size-chars=100x32)
   while (($#)); do
     case $1 in
     --hold) args+=(--hold) ;;

@@ -35,8 +35,8 @@ Coming from another Linux install on the same disk? [docs/migrate.md](docs/migra
 | Super+K | every key, searchable |
 | Super+Space / Super+Return | apps / terminal |
 | Super+B | the boss agent |
-| Super+A | go to whatever needs you; Super+Backspace goes back to your last workspace |
-| Super+M | focus mode: agents can't move you |
+| Super+A | the oldest agent that needs you, else the newest window an agent showed you; Super+Backspace goes back to your last workspace |
+| Super+M | focus mode: agents can't move you, notifications wait |
 | Super+Shift+S | screenshot a region and hand it to the boss |
 
 Full list: [docs/keys.md](docs/keys.md).
@@ -44,10 +44,11 @@ Full list: [docs/keys.md](docs/keys.md).
 | Workspace | What lives there |
 |---|---|
 | 1 boss | your boss agent, started at login |
-| 2 review | diffs, files and test runs agents show you |
+| 2 review | review pages, diffs, files and test runs agents show you |
 | 3 web | local pages agents open, in a separate preview browser |
 | 4 watch | long-running terminals agents open |
-| 5 code · 6 term · 7 chat · 8 · 9 | yours |
+| 5 code · 6 term · 7 chat · 8 | yours |
+| 9 browse | your browser |
 | 10 sys | system monitor, updates |
 
 From a terminal, `ultron` does everything the menu does:
@@ -78,7 +79,7 @@ What the encryption, the sudo popup and rootless Docker protect you from, and wh
 
 ## What's inside
 
-Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · sway · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise · ollama (optional) · Tailscale and ntfy (optional).
+Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · SwayFX (stock sway as the fallback) · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise · ollama (on by itself with a graphics card of about 4 GB or more) · Tailscale and ntfy (optional).
 
 | Folder | |
 |---|---|

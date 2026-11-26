@@ -22,7 +22,7 @@ cmd_status() {
 
   local tick=0 first=1 boss="" local_ai="" ai="" ts="" ts_on=0 joc_up=1
   local prev_total=0 prev_idle=0 total idle cpu=0 user nice sys idl iow irq sirq steal _rest
-  local key val _unit mem_total mem_avail used10 out vol clock bat cap bstate f line b
+  local key val _unit mem_total mem_avail used10 out vol clock bat cap bstate f line b waiting fresh=()
 
   printf '{"version":1}\n[\n'
   while :; do
@@ -31,7 +31,7 @@ cmd_status() {
       conf_load
       conf_var boss BOSS
       boss=${boss%% *}
-      conf_var local_ai LOCAL_AI
+      if local_ai_on; then local_ai=yes; else local_ai=no; fi
       ts_on=0
       if have tailscale && systemctl is-enabled -q tailscaled 2>/dev/null; then ts_on=1; fi
       if ((ts_on)); then
@@ -94,21 +94,32 @@ cmd_status() {
 
     printf -v clock '%(%a %d %b  %H:%M)T' -1
 
+    # The attention queue: one file per waiting window. Workspaces with windows shown but not seen yet.
+    waiting=0
+    for f in "$R"/attention/*; do
+      if [[ -f "$f" ]]; then waiting=$((waiting + 1)); fi
+    done
+    fresh=()
+    if [[ -s "$R/new" ]]; then mapfile -t fresh <"$R/new"; fi
+
     _blocks=()
     if [[ "$boss" == jocasta ]]; then
       if ((!joc_up)); then
         _blk boss "J ✗" "${col[URGENT]}"
-      elif [[ -e "$R/needs-you" ]]; then
-        _blk boss "J ● needs you" "${col[URGENT]}"
+      elif ((waiting)); then
+        _blk boss "J ● $waiting need you" "${col[URGENT]}"
       else
         _blk boss "J" "${col[MUTED]}"
       fi
-    elif [[ -e "$R/needs-you" ]]; then
-      _blk boss "$boss ● needs you" "${col[URGENT]}"
+    elif ((waiting)); then
+      _blk boss "● $waiting need you" "${col[URGENT]}"
     else
       _blk boss "boss: $boss" "${col[MUTED]}"
     fi
+    if ((${#fresh[@]})); then _blk new "new ${fresh[*]}" "${col[ACCENT]}"; fi
     if [[ -e "$R/focus" ]]; then _blk focus "FOCUS" "${col[ACCENT]}"; fi
+    if [[ -e "$R/awake" ]]; then _blk awake "AWAKE" "${col[ACCENT]}"; fi
+    if [[ -e "$R/recording" ]]; then _blk rec "REC" "${col[URGENT]}"; fi
     if [[ "$local_ai" == yes && -n "$ai" ]]; then
       if [[ "$ai" == "AI off" ]]; then _blk ai "$ai" "${col[MUTED]}"; else _blk ai "$ai"; fi
     fi

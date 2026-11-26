@@ -1,6 +1,6 @@
 Super+Return — Terminal (foot)
-Super+Shift+Return — Browser
-Super+Shift+B — Browser
+Super+Shift+Return — Browser on workspace 9
+Super+Shift+B — Browser on workspace 9
 Super+Shift+F — Files (Thunar)
 Super+Shift+N — Workspace 5 and Zed
 Super+Space — App launcher (fuzzel)
@@ -42,9 +42,9 @@ Media keys — Play/pause, next, previous
 Brightness keys — Screen brightness up / down
 Super+B — Boss: jump to the boss agent on workspace 1
 Super+Backspace — Back to the workspace you were on before (same as Super+Ctrl+Tab)
-Super+A — Attention: go to the agent that needs you, else the latest urgent window
+Super+A — Attention: the oldest agent that needs you (press again for the next), else the newest window shown to you
 Super+N — New thread (when the boss is Jocasta)
 Super+Shift+S — Region screenshot for the boss: saves it, copies its path, jumps to the boss
-Super+M — Focus mode on / off (no jumps; workspace 1 turns red instead)
+Super+M — Focus mode on / off (no jumps, notifications held; a workspace turns red when an agent needs you)
 Super+Shift+J — Note a Jocasta friction point (when the boss is Jocasta)
 Super+Shift+C — Reload the sway config

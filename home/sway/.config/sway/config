@@ -9,10 +9,11 @@ set $ws5 5:code
 set $ws6 6:term
 set $ws7 7:chat
 set $ws8 8
-set $ws9 9
+set $ws9 9:browse
 set $ws10 10:sys
 # Theme colours ($c_*) and the keyboard layout, written by `ultron apply`.
 include ~/.config/ultron/generated/sway.conf
+include ~/.config/ultron/generated/effects.conf
 include /etc/sway/config.d/*
 font pango:JetBrains Mono 10
 output * bg $c_bg solid_color
@@ -38,11 +39,12 @@ client.unfocused        $c_bg_alt  $c_bg     $c_muted  $c_bg_alt     $c_bg_alt
 client.urgent           $c_urgent  $c_urgent $c_bg     $c_urgent     $c_urgent
 assign [app_id="^ultron-boss$"] workspace $ws1
 assign [app_id="^ultron-review-"] workspace $ws2
-assign [app_id="^ultron-web$"] workspace $ws3
 assign [app_id="^ultron-watch-"] workspace $ws4
 assign [app_id="^dev\.zed\.Zed$"] workspace $ws5
 assign [app_id="^ultron-sys"] workspace $ws10
 for_window [app_id="^(org\.pulseaudio\.pavucontrol|swappy|imv|ultron-float)$"] floating enable
+# Workspaces 2-4 (what agents show you) are tabs. Runs after the window is placed, so assigned windows match.
+for_window [workspace="^(2:review|3:web|4:watch)$"] layout tabbed
 bar {
   position top
   status_command ultron status
@@ -106,8 +108,8 @@ bindsym $mod+Ctrl+Tab workspace back_and_forth
 
 # Apps
 bindsym $mod+Return exec foot
-bindsym $mod+Shift+Return exec ultron browser
-bindsym $mod+Shift+b exec ultron browser
+bindsym $mod+Shift+Return workspace $ws9; exec ultron browser
+bindsym $mod+Shift+b workspace $ws9; exec ultron browser
 bindsym $mod+Shift+f exec thunar
 bindsym $mod+Shift+n workspace $ws5; exec zeditor
 bindsym $mod+space exec fuzzel

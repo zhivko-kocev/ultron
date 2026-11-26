@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# step ai: ollama (Vulkan) with the ASK_MODEL model, when LOCAL_AI=yes; otherwise ollama is turned off.
+# step ai: ollama (Vulkan) with the ASK_MODEL model, when local AI is on (local_ai_on: LOCAL_AI=yes, or auto
+# with a graphics card of about 4 GB or more); otherwise ollama is turned off.
 # This step owns /etc/systemd/system/ollama.service.d/ultron.conf; your own tuning goes in another drop-in
 # in that folder (e.g. local.conf), which no step writes.
 
@@ -31,19 +32,22 @@ _ai_gpu_index() {
   warn "More than one Vulkan device but no discrete GPU: ollama picks its own (set OLLAMA_GPU to a number to choose)"
 }
 
+# _ai_off: ollama off, with why (LOCAL_AI=no, or auto without a big enough graphics card).
 _ai_off() {
+  local why
+  conf_var why LOCAL_AI
+  if [[ "$why" == auto ]]; then why="no graphics card with 4 GB or more was found"; else why="LOCAL_AI=$why"; fi
   if systemctl list-unit-files ollama.service >/dev/null 2>&1 && systemctl is-enabled -q ollama 2>/dev/null; then
-    say "LOCAL_AI isn't yes: turning ollama off"
+    say "Local AI is off ($why): turning ollama off"
     sudo systemctl disable --now ollama
   else
-    echo "  LOCAL_AI isn't yes: no local model (ultron conf set LOCAL_AI yes to add one)"
+    echo "  Local AI is off ($why): no local model (ultron conf set LOCAL_AI yes to add one anyway)"
   fi
 }
 
 step_ai() {
-  local local_ai model dropin=/etc/systemd/system/ollama.service.d/ultron.conf idx tmp changed=0
-  conf_var local_ai LOCAL_AI
-  if [[ "$local_ai" != yes ]]; then
+  local model dropin=/etc/systemd/system/ollama.service.d/ultron.conf idx tmp changed=0
+  if ! local_ai_on; then
     _ai_off
     return 0
   fi

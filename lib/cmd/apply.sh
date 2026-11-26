@@ -146,6 +146,30 @@ _apply_keyboard() {
   fi
 }
 
+# _apply_effects: SwayFX's corners, shadows and animations when EFFECTS=yes and SwayFX is installed; empty
+# otherwise (stock sway reports these options as config errors). The sway config includes it.
+# When a compositor answers on IPC, it must be SwayFX itself (version 0.x; stock sway is 1.x): right after
+# SwayFX is installed, the running stock sway would show a config error until the next login. The session
+# script runs `ultron apply` before sway starts, so effects start at the next login.
+_apply_effects() {
+  local fx on=0 major
+  conf_var fx EFFECTS
+  if [[ "$fx" == yes ]] && pacman -Q swayfx >/dev/null 2>&1; then
+    on=1
+    if major=$(swaymsg -t get_version -r 2>/dev/null | jq -r '.major' 2>/dev/null) && [[ -n "$major" ]]; then
+      if [[ "$major" != 0 ]]; then on=0; fi
+    fi
+  fi
+  {
+    # shellcheck disable=SC2016 # literal backticks
+    printf '# Written by `ultron apply` from EFFECTS (on only when SwayFX is installed and running). Never edit.\n'
+    if ((on)); then
+      printf '%s\n' 'corner_radius 6' 'shadows enable' 'shadow_blur_radius 20' 'shadow_color #00000066' \
+        'animation_duration_ms 150' 'blur disable'
+    fi
+  } | _apply_write "$ULTRON_GEN/effects.conf"
+}
+
 cmd_apply() {
   local reload=1 t=$ULTRON_ROOT/templates d=$ULTRON_CONF_DIR mode dark scheme layout variant block
   case ${1:-} in
@@ -170,6 +194,7 @@ cmd_apply() {
   _render "$t/fuzzel.ini.tmpl" "$ULTRON_GEN/fuzzel.ini"
   _render "$t/colors.tmpl" "$ULTRON_GEN/colors"
   _apply_swayidle
+  _apply_effects
   _render "$t/mako.tmpl" "$HOME/.config/mako/config"
   _render --append "$d/swaylock" "$t/swaylock.tmpl" "$HOME/.config/swaylock/config"
   _render --append "$d/gtk.ini" "$t/gtk.tmpl" "$HOME/.config/gtk-3.0/settings.ini" "DARK=$dark"

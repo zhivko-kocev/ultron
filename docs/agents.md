@@ -3,12 +3,13 @@
 ## What "agent-first" means here
 
 - **The boss window.** Workspace 1 holds one agent you talk to all day: the boss. It starts at login; Super+B takes you there.
-- **Three agent workspaces.** Agents open windows only on 2 (review: diffs, files, test runs), 3 (web: local pages in a separate preview browser) and 4 (watch: live terminals). They never move you; ultron does, and only when you stop typing for 2 seconds.
-- **Attention.** When an agent needs you, ultron brings you to that agent's window (the boss window, or the terminal the agent runs in). In focus mode (Super+M) it marks the window urgent instead. Super+A goes to whatever needs you, Super+Backspace takes you back to your last workspace.
+- **Three agent workspaces.** Agents open windows only on 2 (review: review pages, diffs, files, test runs), 3 (web: local pages in a separate preview browser, and the visible tabs of browsers agents drive) and 4 (watch: live terminals). Windows there are tabs. Showing never moves you: the bar marks the workspace (`new 2`) until you visit it, and Super+A takes you to the newest one. A window an agent opens with a tag (`--tag`, or the thread it runs for) closes by itself once its folder (the thread's worktree) is gone.
+- **Attention.** Only an agent that needs you moves you: `ultron attention --raise` queues a request for that agent's window (the boss window, or the terminal the agent runs in), and once you stop typing for 2 seconds ultron brings you there. Several requests wait in line, oldest first: the bar shows `● 2 need you`, Super+A walks them, `ultron attention --list` prints them. In focus mode (Super+M) nothing moves you, notifications are held, and the waiting window is marked urgent instead. Super+Backspace takes you back to your last workspace.
+- **Agents' browsers.** An agent browses headless unless you need to see or act; then it shows the tab, which goes to workspace 3. ultron recognises such a window by its browser running with remote debugging (`--remote-debugging…` on its command line) outside the preview profile.
 - **Phone alerts.** When you are away (screen locked, or no input for a while), questions and finished work go to your phone instead (after `ultron install net ntfy`).
 - **sudo popup.** An agent's `sudo` shows a password popup with the exact command and folder. Your own terminals keep the normal prompt. What this does and doesn't protect you from: [security.md](security.md).
 - **Rootless Docker.** Agents can build and run containers without root access to the PC.
-- **Local model.** `ask "…"` and `http://127.0.0.1:11434` run a small model on your GPU for cheap, private chores.
+- **Local model.** `ask "…"` and `http://127.0.0.1:11434` run a small model on your GPU for cheap, private chores. It is on when the PC has a graphics card with about 4 GB of memory or more (`LOCAL_AI`, see `docs/customize.md`).
 
 Agents learn all of this from one guide: `ultron guide` prints it, and `ultron info --json` tells them about this machine.
 

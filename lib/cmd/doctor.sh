@@ -72,13 +72,26 @@ _check_links() {
 
 _check_generated() {
   local f missing=()
-  for f in "$ULTRON_GEN"/{sway.conf,foot.ini,fuzzel.ini,colors,swayidle} "$HOME/.config/mako/config" "$HOME/.config/swaylock/config"; do
+  for f in "$ULTRON_GEN"/{sway.conf,effects.conf,foot.ini,fuzzel.ini,colors,swayidle} "$HOME/.config/mako/config" "$HOME/.config/swaylock/config"; do
     [[ -s "$f" ]] || missing+=("${f/#"$HOME"/\~}")
   done
   if ((${#missing[@]} == 0)); then
     _pass "generated config files exist"
   else
     _fail "generated config files missing (run ultron apply): ${missing[*]}"
+  fi
+}
+
+# _check_effects: EFFECTS=yes needs SwayFX (stock sway is the fallback when it didn't build).
+_check_effects() {
+  local fx
+  conf_var fx EFFECTS
+  if [[ "$fx" != yes ]]; then
+    _info "effects are off (EFFECTS=$fx)"
+  elif pacman -Q swayfx >/dev/null 2>&1; then
+    _pass "effects: SwayFX is installed"
+  else
+    _warnl "effects: EFFECTS=yes but SwayFX isn't installed (stock sway runs instead): ultron install desktop"
   fi
 }
 
@@ -107,9 +120,13 @@ _check_docker() {
 
 _check_ai() {
   local local_ai model role
-  conf_var local_ai LOCAL_AI
-  if [[ "$local_ai" != yes ]]; then
-    _info "local AI is off (LOCAL_AI=$local_ai)"
+  if ! local_ai_on; then
+    conf_var local_ai LOCAL_AI
+    if [[ "$local_ai" == auto ]]; then
+      _info "local AI is off (LOCAL_AI=auto: no graphics card with 4 GB or more)"
+    else
+      _info "local AI is off (LOCAL_AI=$local_ai)"
+    fi
     return 0
   fi
   model=$(ask_model)
@@ -245,9 +262,8 @@ _check_root() {
 }
 
 _check_deep() {
-  local out local_ai
-  conf_var local_ai LOCAL_AI
-  if [[ "$local_ai" != yes ]]; then
+  local out
+  if ! local_ai_on; then
     _info "--deep: local AI is off, nothing to ask"
     return 0
   fi
@@ -280,6 +296,7 @@ cmd_doctor() {
   _check "ufw is active" systemctl is-active -q ufw
   _check_links
   _check_generated
+  _check_effects
   _check_boss
   _check_docker
   _check_ai

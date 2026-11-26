@@ -40,8 +40,8 @@ Agents
   agent list|add|remove|run|boss   coding agents (omp, claude, codex, gemini, opencode, ...)
   guide               the rules of this machine, for agents
   info [--json]       facts about this machine, for agents
-  show review|web|watch|file|list|close   open something for the user on workspace 2 / 3 / 4
-  attention [--raise TITLE|--done TITLE]  tell the user an agent needs them / has finished
+  show review|watch|web|file|code|list|close   show something on workspace 2 / 3 / 4 (never moves the user)
+  attention [--raise TITLE|--done TITLE|--list]  tell the user an agent needs them / has finished
   notify [--phone] [--urgent] TITLE BODY
   boss [--start]      start or show the boss window
   task                new thread (when the boss is Jocasta)
@@ -49,8 +49,8 @@ Agents
 Desktop (bound to keys)
   browser [URL]       the everyday browser
   open-url URL        route a link: localhost to the preview, else the browser
-  jump N [--con-id C]   move the user to workspace N (typing guard)
-  focus [toggle|on|off]   focus mode (agents don't move you)
+  jump                take the user to the oldest request once they stop typing (run by attention)
+  focus [toggle|on|off]   focus mode (agents don't move you, notifications held)
   snap                region screenshot for the boss
   shot region|full    screenshots
   close               close the focused window (asks for the boss)

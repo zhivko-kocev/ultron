@@ -56,16 +56,15 @@ jocasta_omp_want() {
 
 # set_omp_settings: the omp settings ultron needs; `jocasta setup` and a restored config may reset them,
 # so the agents step, the jocasta step and `migrate restore` reapply them.
-#  - commit role (LOCAL_AI=yes only): the local model first, then whatever non-local models were there.
+#  - commit role (local AI on only): the local model first, then whatever non-local models were there.
 #    modelRoles is one record setting (`modelRoles.commit` isn't a key), so it's read, merged, written back.
 #  - power.sleepPrevention off: omp's default ("idle") holds a logind idle inhibitor while it runs, and
 #    swayidle then turns off every timeout (typing guard, away, lock, screen off). Nothing in ultron
 #    suspends on idle, so there is nothing for omp to prevent.
 set_omp_settings() {
   have omp || return 0
-  local local_ai roles new
-  conf_var local_ai LOCAL_AI
-  if [[ "$local_ai" == yes ]]; then
+  local roles new
+  if local_ai_on; then
     roles=$(omp config get modelRoles 2>/dev/null) || roles='{}'
     if new=$(jq -c --arg m "ollama/$(ask_model)" '
       (. // {}) as $r

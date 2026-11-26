@@ -5,22 +5,24 @@ description: Use on an ultron PC to show the user something (diff, web page, fil
 
 # ultron
 
-This PC runs ultron (Arch + sway). The user works on numbered workspaces; you may open things only on 2 (review), 3 (web) and 4 (watch), and only through the commands below. Run `ultron info --json` to learn the machine: the boss, the browser, the workspace map, the local model, Docker, and whether the user is away or in focus mode.
+This PC runs ultron (Arch + sway). The user works on numbered workspaces; you may open things only on 2 (review), 3 (web) and 4 (watch), and only through the commands below. Run `ultron info --json` to learn the machine: the boss, the browser, the workspace map, the local model, Docker, what waits for the user, and whether they are away or in focus mode.
 
 ## Showing things to the user
 
+Showing never moves the user: the window opens as a tab on its workspace, the bar marks that workspace (`new 2`), and the user goes there when they choose (Super+A). If you need them to look or act, also raise attention (item 9).
+
 1. **A review** (diff, test run, PR): `ultron show review [--cwd DIR] [--hold] [-- CMD…]`. With no command it opens `hunk diff --watch` in DIR (default: the current folder). Use `--hold` when the command ends and its output must stay visible.
-2. **A web page**: `ultron show web <url>`. `xdg-open` on a localhost URL (`localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0`, `*.localhost`) does the same; other URLs open in the user's browser.
-3. **A long-running command** (dev server, log tail, test watcher): `ultron show watch [--cwd DIR] [--title T] -- CMD…`. The terminal stays open after the command ends.
-4. **A file** (image, PDF, video, audio, text, JSON): `ultron show file PATH`. It opens on workspace 2.
-5. Every `show` prints `opened on workspace N (id ID)`. `ultron show list` prints `ID<TAB>WORKSPACE<TAB>TITLE` for the windows opened this way; `ultron show close ID` closes one (`web` closes the preview browser). Close what you opened once it's no longer useful.
-6. Never open windows any other way, and never switch the user's workspace or focus yourself (no `swaymsg workspace`, no `swaymsg focus`). ultron decides when to move the user.
+2. **A web page**: `ultron show web <url> [--ws 2|3|4]`. It opens in a separate preview browser on 3; Jocasta's review pages (`/brief/thread-…`, `/brief/pr-…`) go to 2 and its board (`/board`) to 4. `xdg-open` on a localhost URL (`localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0`, `*.localhost`) does the same; other URLs open in the user's browser on 9.
+3. **A long-running command** (dev server, log tail, test watcher): `ultron show watch [--cwd DIR] [--title T] -- CMD…` on 4. The terminal stays open after the command ends.
+4. **A file**: `ultron show file PATH`. Images, PDF, video, audio, text and JSON open on 2; an HTML file opens like a web page. **Code at a line**: `ultron show code FILE[:LINE[:COL]]` opens it in the editor (Zed, workspace 5).
+5. Every `show` prints `opened on workspace N (id ID)`. IDs: `ultron-review-…`, `ultron-watch-…`, `web:<n>`, `con:<n>`, `agent-web:<n>`. `ultron show list` prints `ID<TAB>WORKSPACE<TAB>TAG<TAB>TITLE` for the windows opened this way; `ultron show close ID` closes one, `ultron show close --tag T` all with that tag. Close what you opened once it's no longer useful.
+6. **Tags**: every `show` takes `--tag T` (default: `$ULTRON_TAG`, else `$JOCASTA_THREAD`); terminal titles start with `[T]`. A tagged window closes by itself once the folder it was opened from (your worktree) is gone.
+7. **Your own browser**: browse headless unless the user must see or act; then open the tab with `headed: true`. A visible tab of a browser you drive (remote debugging on) is moved to workspace 3 and listed as `agent-web:<n>`.
+8. Never open windows any other way, and never switch the user's workspace or focus yourself (no `swaymsg workspace`, no `swaymsg focus`).
 
 ## Asking for the user
 
-7. When you are blocked on the user (a question, an approval, a choice), run `ultron attention --raise "<what you need>"`. ultron brings them to your window when they stop typing, marks it urgent in focus mode, or pushes to their phone when they are away.
-8. When something long has finished, run `ultron attention --done "<what finished>"` (a phone push only when they are away).
-9. Other desktop or phone notices: `ultron notify "<title>" "<body>"`.
+9. When you are blocked on the user (a question, an approval, a choice), run `ultron attention --raise "<what you need>"`: only this moves them. Requests wait in a queue, oldest first (`ultron attention --list`); ultron brings the user to your window once they stop typing, marks it urgent in focus mode, or pushes to their phone when they are away. When something long has finished, run `ultron attention --done "<what finished>"` (a phone push only when they are away). Other desktop or phone notices: `ultron notify "<title>" "<body>"`.
 
 ## Root access
 

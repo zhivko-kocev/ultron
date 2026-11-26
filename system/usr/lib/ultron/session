@@ -37,4 +37,21 @@ fi
 mkdir -p "$XDG_RUNTIME_DIR/ultron"
 # greetd starts sessions in /; everything sway execs (the boss, terminals) inherits this folder.
 cd "$HOME"
-exec systemd-cat --identifier=sway sway
+# A VM may have no GPU wlroots accepts (SwayFX renders through GLES); software rendering is fine there.
+if systemd-detect-virt -q --vm; then export WLR_RENDERER_ALLOW_SOFTWARE=1; fi
+
+# Render the configs for the compositor about to start: effects.conf turns SwayFX's options on only when
+# SwayFX is the sway that runs (a SwayFX installed during the last session starts its effects here).
+if [[ -x "$HOME/.local/bin/ultron" ]]; then
+  env -u SWAYSOCK "$HOME/.local/bin/ultron" apply --no-reload >/dev/null 2>&1 || true
+fi
+
+# Not exec: when sway dies at once (say, a SwayFX that no longer starts after an update), the user gets a
+# shell and the way back instead of a login loop.
+start=$SECONDS rc=0
+systemd-cat --identifier=sway sway || rc=$?
+if ((rc != 0 && SECONDS - start < 10)); then
+  echo "The desktop failed to start. After an update: reboot and pick a snapshot in the boot menu, or run: ultron conf set EFFECTS no && ultron install desktop"
+  exec bash -l
+fi
+exit "$rc"

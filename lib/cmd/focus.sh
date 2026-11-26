@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# ultron focus [toggle|on|off]: focus mode. No jumps; the boss window gets an urgent mark instead.
+# ultron focus [toggle|on|off]: focus mode. No jumps (a window that needs you gets an urgent mark instead) and
+# notifications are held (mako's do-not-disturb mode) until it ends.
 
 cmd_focus() {
   local mode=${1:-toggle}
@@ -10,11 +11,13 @@ cmd_focus() {
   case $mode in
   on)
     touch "$R/focus"
-    desktop_notify "Focus mode on" "No jumps: workspace 1 turns red when the boss needs you"
+    desktop_notify "Focus mode on" "No jumps and no notifications: a workspace turns red when an agent needs you"
+    makoctl mode -a do-not-disturb >/dev/null 2>&1 || true
     ;;
   off)
     rm -f "$R/focus"
-    desktop_notify "Focus mode off" "Jumps are back on"
+    makoctl mode -r do-not-disturb >/dev/null 2>&1 || true
+    desktop_notify "Focus mode off" "Jumps and notifications are back on"
     ;;
   *) die "usage: ultron focus [toggle|on|off]" ;;
   esac

@@ -26,8 +26,11 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 | `BOSS` | `omp` | The agent in the boss window on workspace 1: any command, e.g. `claude`, `codex`, `jocasta` |
 | `BROWSER` | `chromium` | The everyday browser (Super+Shift+Return, links) |
 | `THEME` | `gruvbox-dark` | Colour theme |
+| `FONT` | `JetBrainsMono Nerd Font` | Font of the terminals, the launcher, notifications and the bar |
+| `BACKGROUND` | empty | Image behind the windows (a file path); empty = the theme's background colour |
+| `EFFECTS` | `yes` | Rounded corners, shadows and window animations with SwayFX (built from the AUR; it replaces sway). Effects start at the next login after SwayFX is installed. When it doesn't build, or an update needs it rebuilt, stock sway runs until `ultron update` rebuilds it. `no` goes back to stock sway |
 | `KEYBOARD`, `KEYBOARD_VARIANT` | `us`, empty | Keyboard layouts, e.g. `us,de` |
-| `LOCAL_AI` | `yes` | Run a local model with ollama (`no` removes it from the install) |
+| `LOCAL_AI` | `auto` | Run a local model with ollama: `auto` = when a graphics card with about 4 GB of memory or more is found, `yes` = always, `no` = never (removes it from the install) |
 | `ASK_MODEL` | `qwen3:4b` | The local model `ask` uses |
 | `OLLAMA_GPU` | `auto` | Which GPU ollama uses: `auto`, a Vulkan device number, or `none` |
 | `DOTFILES_REPO` | empty | Your dotfiles repo (git URL); cloned to `~/Projects/dotfiles`, its `install.sh` is run |
@@ -37,7 +40,7 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 | `LOCK_AFTER` | `600` | Seconds before the screen locks; `0` = never |
 | `SCREEN_OFF_AFTER` | `900` | Seconds before the screen turns off; `0` = never |
 
-`MOUNTS`, `FIREWALL_ALLOW`, `LOCAL_AI` and `OLLAMA_GPU` change the system: run `ultron install` after changing them. An entry you remove from `MOUNTS` or `FIREWALL_ALLOW` is taken out of `/etc/fstab` or the firewall again; lines and rules you added by hand are left alone.
+`MOUNTS`, `FIREWALL_ALLOW`, `LOCAL_AI`, `OLLAMA_GPU` and `EFFECTS` change the system: run `ultron install` after changing them (for `EFFECTS`, `ultron install desktop`, then log out and in). An entry you remove from `MOUNTS` or `FIREWALL_ALLOW` is taken out of `/etc/fstab` or the firewall again; lines and rules you added by hand are left alone.
 
 ## Themes
 

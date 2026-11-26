@@ -29,6 +29,22 @@ _update_jocasta() {
   say "Quit Jocasta (Ctrl+B, Alt+Q), then press Super+B to start the new build"
 }
 
+# _update_pacman: pacman -Syu. SwayFX is built against one wlroots version, so a repository upgrade can
+# refuse to go ahead because of it: then SwayFX is swapped for stock sway and rebuilt after the AUR phase.
+_update_pacman() {
+  local log rc=0
+  log=$(mktemp)
+  sudo pacman -Syu --noconfirm 2>&1 | tee "$log" || rc=$?
+  if ((rc != 0)) && grep -q swayfx "$log"; then
+    warn "SwayFX holds back the upgrade: switching to stock sway for now (SwayFX is rebuilt below)"
+    rc=0
+    sudo pacman -Rdd --noconfirm swayfx || rc=$?
+    if ((rc == 0)); then sudo pacman -Syu --noconfirm sway || rc=$?; fi
+  fi
+  rm -f "$log"
+  ((rc == 0)) || die "pacman -Syu failed (see above)."
+}
+
 cmd_update() {
   local pull=1
   case ${1:-} in
@@ -61,12 +77,15 @@ cmd_update() {
   pkg_lock
   sudo_keepalive
   say "Upgrading packages from the Arch repositories (pacman -Syu)"
-  sudo pacman -Syu --noconfirm || die "pacman -Syu failed (see above)."
+  _update_pacman
   local steps=() s
   for s in "${ULTRON_DEFAULT_STEPS[@]}"; do
     _in_list "$s" preflight aur agents || steps+=("$s")
   done
+  # The desktop step installs SwayFX only after the AUR phase below, without the ticket.
+  _DESKTOP_FX_AFTER_AUR=1
   run_steps "${steps[@]}"
+  _DESKTOP_FX_AFTER_AUR=0
 
   # 3. Jocasta from main (its step drops the sudo ticket itself).
   _update_jocasta
@@ -76,6 +95,13 @@ cmd_update() {
   run_steps aur
   say "Upgrading AUR packages (yay -Sua)"
   yay -Sua --noconfirm || warn "yay -Sua failed (see above): the AUR packages it names stay at their old versions"
+  # SwayFX when EFFECTS=yes and it's missing (swapped out by _update_pacman, or an earlier build failed).
+  # shellcheck source=../install/desktop.sh
+  source "$ULTRON_ROOT/lib/install/desktop.sh"
+  # shellcheck source=apply.sh
+  source "$ULTRON_ROOT/lib/cmd/apply.sh"
+  _desktop_effects
+  _apply_effects
 
   # 5. Agent tools and the rest of mise, without sudo.
   run_steps agents

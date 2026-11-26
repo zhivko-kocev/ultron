@@ -17,13 +17,14 @@ JOCASTA_DIR="$HOME/Projects/jocasta"
 JOCASTA_INSTALL_DIR="$HOME/.local/lib/jocasta"
 AGENT_BIN="$HOME/.local/lib/ultron/agent-bin"
 
-# Runtime state ($R): idle2, away, focus, needs-you, jump.lock, pkg.lock.
+# Runtime state ($R): idle2, away, focus, awake, recording, attention/ (the queue), new, shown, shown-last,
+# show.lock, jump.lock, pkg.lock.
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR
 R="$XDG_RUNTIME_DIR/ultron"
 
 # Workspace number -> name (index 1..10).
-WS=("" "1:boss" "2:review" "3:web" "4:watch" "5:code" "6:term" "7:chat" "8" "9" "10:sys")
+WS=("" "1:boss" "2:review" "3:web" "4:watch" "5:code" "6:term" "7:chat" "8" "9:browse" "10:sys")
 
 # ---- output -----------------------------------------------------------------
 
@@ -110,11 +111,12 @@ ultron_repo_url() {
 # KEY=value files: conf.d/*.conf in name order, then ultron.conf (the last one read wins).
 # Files are parsed, never sourced. An empty value means "use the default".
 
-_CONF_KEYS=(BOSS BROWSER THEME KEYBOARD KEYBOARD_VARIANT LOCAL_AI ASK_MODEL OLLAMA_GPU
+_CONF_KEYS=(BOSS BROWSER THEME FONT BACKGROUND EFFECTS KEYBOARD KEYBOARD_VARIANT LOCAL_AI ASK_MODEL OLLAMA_GPU
   DOTFILES_REPO MOUNTS FIREWALL_ALLOW AWAY_AFTER LOCK_AFTER SCREEN_OFF_AFTER)
 declare -A _CONF_DEFAULT=(
-  [BOSS]=omp [BROWSER]=chromium [THEME]=gruvbox-dark [KEYBOARD]=us [KEYBOARD_VARIANT]=""
-  [LOCAL_AI]=yes [ASK_MODEL]=qwen3:4b [OLLAMA_GPU]=auto [DOTFILES_REPO]="" [MOUNTS]="" [FIREWALL_ALLOW]=""
+  [BOSS]=omp [BROWSER]=chromium [THEME]=gruvbox-dark [FONT]="JetBrainsMono Nerd Font" [BACKGROUND]="" [EFFECTS]=yes
+  [KEYBOARD]=us [KEYBOARD_VARIANT]=""
+  [LOCAL_AI]=auto [ASK_MODEL]=qwen3:4b [OLLAMA_GPU]=auto [DOTFILES_REPO]="" [MOUNTS]="" [FIREWALL_ALLOW]=""
   [AWAY_AFTER]=300 [LOCK_AFTER]=600 [SCREEN_OFF_AFTER]=900
 )
 declare -A _CONF=()
@@ -189,6 +191,30 @@ conf_set() {
 boss_kind() { conf_get BOSS; }
 browser_cmd() { conf_get BROWSER; }
 ask_model() { conf_get ASK_MODEL; }
+
+# local_ai_on: whether the local model runs. LOCAL_AI yes / no; auto = a graphics card with about 4 GB of
+# memory or more (3.5 GiB, as cards report a little less than their size). ULTRON_SYS_DRM replaces
+# /sys/class/drm (the self-checks point it at a fake one).
+local_ai_on() {
+  local v f bytes mib
+  conf_var v LOCAL_AI
+  case $v in
+  yes) return 0 ;;
+  auto) ;;
+  *) return 1 ;;
+  esac
+  for f in "${ULTRON_SYS_DRM:-/sys/class/drm}"/card*/device/mem_info_vram_total; do
+    [[ -r "$f" ]] || continue
+    bytes=$(<"$f")
+    if [[ "$bytes" =~ ^[0-9]+$ ]] && ((bytes >= 3758096384)); then return 0; fi
+  done
+  have nvidia-smi || return 1
+  while IFS= read -r mib; do
+    mib=${mib//[[:space:]]/}
+    if [[ "$mib" =~ ^[0-9]+$ ]] && ((mib >= 3500)); then return 0; fi
+  done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null || true)
+  return 1
+}
 
 # conf_mounts: the MOUNTS setting as "SPEC MOUNTPOINT" lines (SPEC = LABEL=x, UUID=x or /dev/x).
 conf_mounts() {

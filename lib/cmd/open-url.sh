@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# ultron open-url URL: the default link handler. Localhost goes to the preview Chromium on
-# workspace 3, everything else to the everyday browser.
+# ultron open-url URL: the default link handler. Localhost goes to `ultron show web` unchanged (a preview window
+# on workspace 3; Jocasta's review pages on 2, its board on 4), everything else to the everyday browser.
 
 cmd_open_url() {
   local url=${1:-}

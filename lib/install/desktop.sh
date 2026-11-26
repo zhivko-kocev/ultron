@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# step desktop: stow home/ into ~, the ultron command, generated configs (theme, settings), keyring,
-# folders, default apps, and a starter zsh config for people without dotfiles.
+# step desktop: stow home/ into ~, the ultron command, SwayFX or stock sway (EFFECTS), generated configs
+# (theme, settings), keyring, folders, default apps, and a starter zsh config for people without dotfiles.
 
 # Real directories (never stow-folded), so other tools and ultron apply can add files beside the links.
 _desktop_dirs() {
@@ -113,6 +113,26 @@ _desktop_shell() {
   fi
 }
 
+# _desktop_effects: SwayFX (AUR; it replaces sway) when EFFECTS=yes, stock sway otherwise. A failed SwayFX
+# build leaves stock sway with a warning. ultron update sets _DESKTOP_FX_AFTER_AUR=1 so its root steps skip
+# the build (they hold the sudo ticket), then calls this again after its AUR phase.
+_desktop_effects() {
+  local fx
+  conf_var fx EFFECTS
+  if [[ "$fx" == yes ]]; then
+    if pacman -Q swayfx >/dev/null 2>&1 || [[ "${_DESKTOP_FX_AFTER_AUR:-0}" == 1 ]]; then return 0; fi
+    say "Installing SwayFX (sway with rounded corners, shadows and animations, built from the AUR)"
+    if yay -S --needed --noconfirm --ask 4 swayfx; then
+      say "SwayFX is installed: log out and in (Super+Escape, Log out) to start the effects"
+    else
+      warn "Effects are off: SwayFX didn't build; ultron update tries again."
+    fi
+  elif pacman -Q swayfx >/dev/null 2>&1; then
+    say "EFFECTS=$fx: replacing SwayFX with stock sway (from your next login)"
+    sudo pacman -S --noconfirm --ask 4 sway || die "Couldn't replace SwayFX with sway (see above); rerun: ultron install desktop"
+  fi
+}
+
 # _desktop_first_boot_done: remove the first-boot autologin and install-on-login that bootstrap.sh armed.
 # The last root action of this step (the last root step of a default install): the install's root work is
 # done, so tty1 goes back to a normal login.
@@ -143,6 +163,7 @@ step_desktop() {
   ln -sfn "$ULTRON_ROOT/bin/ultron" "$HOME/.local/bin/ultron"
   ok "$HOME/.local/bin/ultron -> $ULTRON_ROOT/bin/ultron"
 
+  _desktop_effects
   say "Writing the theme and settings into the app configs"
   # shellcheck source=../cmd/apply.sh
   source "$ULTRON_ROOT/lib/cmd/apply.sh"

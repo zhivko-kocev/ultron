@@ -35,10 +35,10 @@ Then close the old boss window (Super+W on workspace 1, confirm) and press Super
 | Piece | What it does |
 |---|---|
 | Boss window | `foot --app-id=ultron-boss`, with `agent-bin` first on PATH so an agent's `sudo` goes through the popup that shows the command and folder ([security.md](security.md)) |
-| `ultron-attentiond` | Follows `~/.local/share/jocasta/data/notifications.jsonl`. `blocked` → jump to workspace 1 after the typing guard, or the urgent mark in focus mode, or a phone push when away. `done`/`failed` → phone push only when away |
-| Link router | `xdg-open http://127.0.0.1:<port>/…` (Jocasta's briefs) opens in the preview Chromium on workspace 3; other links go to your browser |
+| `ultron-attentiond` | Follows `~/.local/share/jocasta/data/notifications.jsonl`. `blocked` → a request in the attention queue for the boss window: you are taken there after the typing guard, or it gets the urgent mark in focus mode, or a phone push when away. `done`/`failed` → phone push only when away |
+| Link router | `xdg-open http://127.0.0.1:<port>/…` opens in the preview Chromium: review pages (`/brief/thread-…`, `/brief/pr-…`) on workspace 2, the board (`/board`) on 4, other local pages on 3, without moving you; other links go to your browser |
 | mako | Styles Jocasta's notifications (`app-name=Jocasta`, blue border) |
-| Bar | The `J` block: grey when running, red `J ✗` when not running, red `J ● needs you` while something is blocked |
+| Bar | The `J` block: grey when running, red `J ✗` when not running, red `J ● 2 need you` while requests wait |
 | Keys | Super+B (boss), Super+N (Jocasta's New thread: Ctrl+B then Alt+N), Super+A (attention), Super+Shift+S (screenshot path for the boss), Super+Shift+J (friction note) |
 | omp | Pinned to Jocasta's README version through mise |
 

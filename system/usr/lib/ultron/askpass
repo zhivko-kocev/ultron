@@ -9,12 +9,13 @@ export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
 rundir=$XDG_RUNTIME_DIR/ultron
 ntfy_env=/etc/ultron/ntfy.env
 
-# The parent is sudo: its command line (NUL-separated) and working folder.
+# The parent is sudo: its command line (NUL-separated). sudo is setuid root, so its /proc cwd link
+# can't be read as the user; askpass inherits sudo's folder, which is the caller's.
 args=()
 if [[ -r /proc/$PPID/cmdline ]]; then
   mapfile -d '' -t args </proc/"$PPID"/cmdline
 fi
-folder=$(readlink "/proc/$PPID/cwd" 2>/dev/null || echo "?")
+folder=$(pwd -P 2>/dev/null || echo "?")
 
 # Drop the leading sudo and its options, keeping only the command it will run.
 if ((${#args[@]} > 0)) && [[ ${args[0]##*/} == sudo ]]; then

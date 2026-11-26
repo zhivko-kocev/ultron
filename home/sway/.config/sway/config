@@ -11,12 +11,10 @@ set $ws7 7:chat
 set $ws8 8
 set $ws9 9:browse
 set $ws10 10:sys
-# Theme colours ($c_*) and the keyboard layout, written by `ultron apply`.
+# Theme colours ($c_*), the font ($font), the background and the keyboard layout, written by `ultron apply`.
 include ~/.config/ultron/generated/sway.conf
 include ~/.config/ultron/generated/effects.conf
 include /etc/sway/config.d/*
-font pango:JetBrains Mono 10
-output * bg $c_bg solid_color
 # Blocks are multi-line on purpose: sway ignores the settings of a one-line `{ a; b }` block.
 input type:keyboard {
   repeat_delay 300
@@ -48,7 +46,7 @@ for_window [workspace="^(2:review|3:web|4:watch)$"] layout tabbed
 bar {
   position top
   status_command ultron status
-  font pango:JetBrains Mono 10
+  font $font
   colors {
     background $c_bg
     statusline $c_fg
@@ -143,7 +141,8 @@ bindsym $mod+Mod1+s move scratchpad
 
 # System
 bindsym $mod+Ctrl+l exec ultron lock
-bindsym $mod+Ctrl+v exec cliphist list | fuzzel --dmenu --prompt "clip ▸ " | cliphist decode | wl-copy
+bindsym $mod+Ctrl+v exec ultron pick clip
+bindsym $mod+Ctrl+e exec ultron pick emoji
 bindsym $mod+comma exec makoctl dismiss
 bindsym $mod+Shift+comma exec makoctl dismiss --all
 bindsym Print exec ultron shot region

@@ -146,6 +146,32 @@ _apply_keyboard() {
   fi
 }
 
+# _apply_font VAR: the FONT setting, checked so it can't break the sway, foot, fuzzel or mako config.
+_apply_font() {
+  local -n _font=$1
+  conf_var _font FONT
+  if [[ ! "$_font" =~ ^[A-Za-z0-9][A-Za-z0-9\ ._+-]*$ ]]; then
+    warn "FONT=$_font isn't a font family name (like JetBrainsMono Nerd Font): using $(conf_default FONT)"
+    _font=$(conf_default FONT)
+  fi
+}
+
+# _apply_background VAR: the sway line for the BACKGROUND setting (an image, ~ allowed), else the theme colour.
+_apply_background() {
+  local -n _bg=$1
+  local file
+  conf_var file BACKGROUND
+  # shellcheck disable=SC2088 # a literal ~/ in the setting, expanded here
+  if [[ "${file:0:2}" == "~/" ]]; then file=$HOME/${file:2}; fi
+  _bg="output * bg #${_THEME[BG]} solid_color"
+  if [[ -z "$file" ]]; then return 0; fi
+  if [[ "$file" == *'"'* || ! -f "$file" ]]; then
+    warn "BACKGROUND=$file isn't an image file: using the theme's colour"
+    return 0
+  fi
+  _bg="output * bg \"$file\" fill"
+}
+
 # _apply_effects: SwayFX's corners, shadows and animations when EFFECTS=yes and SwayFX is installed; empty
 # otherwise (stock sway reports these options as config errors). The sway config includes it.
 # When a compositor answers on IPC, it must be SwayFX itself (version 0.x; stock sway is 1.x): right after
@@ -170,8 +196,22 @@ _apply_effects() {
   } | _apply_write "$ULTRON_GEN/effects.conf"
 }
 
+# _apply_palette: the theme's colours for Jocasta (~/.jocasta/agent/palette.json, read when Jocasta starts),
+# written only when Jocasta is set up. Needs theme_load first.
+_apply_palette() {
+  local dir=$HOME/.jocasta/agent tmp omp=dark-terminal
+  [[ -d "$dir" ]] || return 0
+  if [[ "${_THEME[MODE]}" == light ]]; then omp=light-terminal; fi
+  tmp=$(mktemp "$dir/.palette.json.XXXXXX")
+  printf '{"ompTheme": "%s", "colors": {"bg-0": "#%s", "bg-1": "#%s", "bg-2": "#%s", "bg-3": "#%s", "fg": "#%s", "fg-2": "#%s", "fg-3": "#%s", "comment": "#%s", "blue": "#%s", "cyan": "#%s", "yellow": "#%s", "red": "#%s", "green": "#%s", "purple": "#%s", "orange": "#%s"}}\n' \
+    "$omp" "${_THEME[BG]}" "${_THEME[BG_ALT]}" "${_THEME[BG_ALT]}" "${_THEME[BG_SEL]}" "${_THEME[FG]}" \
+    "${_THEME[FG_DIM]}" "${_THEME[MUTED]}" "${_THEME[MUTED]}" "${_THEME[C12]}" "${_THEME[C14]}" "${_THEME[C11]}" \
+    "${_THEME[C9]}" "${_THEME[C10]}" "${_THEME[C13]}" "${_THEME[ACCENT_ALT]}" >"$tmp"
+  mv -fT "$tmp" "$dir/palette.json"
+}
+
 cmd_apply() {
-  local reload=1 t=$ULTRON_ROOT/templates d=$ULTRON_CONF_DIR mode dark scheme layout variant block
+  local reload=1 t=$ULTRON_ROOT/templates d=$ULTRON_CONF_DIR mode dark scheme layout variant block font bg
   case ${1:-} in
   "") ;;
   --no-reload) reload=0 ;;
@@ -189,13 +229,16 @@ cmd_apply() {
   block=$'input type:keyboard {\n  xkb_layout '"$layout"
   if [[ -n "$variant" ]]; then block+=$'\n  xkb_variant '"$variant"; fi
   block+=$'\n}'
-  _render "$t/sway.conf.tmpl" "$ULTRON_GEN/sway.conf" "KEYBOARD_BLOCK=$block"
-  _render "$t/foot.ini.tmpl" "$ULTRON_GEN/foot.ini"
-  _render "$t/fuzzel.ini.tmpl" "$ULTRON_GEN/fuzzel.ini"
+  _apply_font font
+  _apply_background bg
+  _render "$t/sway.conf.tmpl" "$ULTRON_GEN/sway.conf" "KEYBOARD_BLOCK=$block" "FONT=$font" "BG_LINE=$bg"
+  _render "$t/foot.ini.tmpl" "$ULTRON_GEN/foot.ini" "FONT=$font"
+  _render "$t/fuzzel.ini.tmpl" "$ULTRON_GEN/fuzzel.ini" "FONT=$font"
   _render "$t/colors.tmpl" "$ULTRON_GEN/colors"
   _apply_swayidle
   _apply_effects
-  _render "$t/mako.tmpl" "$HOME/.config/mako/config"
+  _apply_palette
+  _render "$t/mako.tmpl" "$HOME/.config/mako/config" "FONT=$font"
   _render --append "$d/swaylock" "$t/swaylock.tmpl" "$HOME/.config/swaylock/config"
   _render --append "$d/gtk.ini" "$t/gtk.tmpl" "$HOME/.config/gtk-3.0/settings.ini" "DARK=$dark"
   _render --append "$d/gtk.ini" "$t/gtk.tmpl" "$HOME/.config/gtk-4.0/settings.ini" "DARK=$dark"

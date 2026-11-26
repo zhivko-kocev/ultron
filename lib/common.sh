@@ -11,10 +11,7 @@ ULTRON_DATA="$HOME/.local/share/ultron"
 NTFY_ENV="/etc/ultron/ntfy.env"
 PREVIEW_PROFILE="$ULTRON_DATA/chromium-preview"
 DOTFILES_DIR="$HOME/Projects/dotfiles"
-JOCASTA_REPO_URL="https://github.com/zhivko-kocev/jocasta"
 JOCASTA_NOTES="$ULTRON_DATA/jocasta-notes.md"
-JOCASTA_DIR="$HOME/Projects/jocasta"
-JOCASTA_INSTALL_DIR="$HOME/.local/lib/jocasta"
 AGENT_BIN="$HOME/.local/lib/ultron/agent-bin"
 
 # Runtime state ($R): idle2, away, focus, awake, recording, attention/ (the queue), new, shown, shown-last,
@@ -114,7 +111,7 @@ ultron_repo_url() {
 _CONF_KEYS=(BOSS BROWSER THEME FONT BACKGROUND EFFECTS KEYBOARD KEYBOARD_VARIANT LOCAL_AI ASK_MODEL OLLAMA_GPU
   DOTFILES_REPO MOUNTS FIREWALL_ALLOW AWAY_AFTER LOCK_AFTER SCREEN_OFF_AFTER)
 declare -A _CONF_DEFAULT=(
-  [BOSS]=omp [BROWSER]=chromium [THEME]=gruvbox-dark [FONT]="JetBrainsMono Nerd Font" [BACKGROUND]="" [EFFECTS]=yes
+  [BOSS]=jocasta [BROWSER]=chromium [THEME]=gruvbox-dark [FONT]="JetBrainsMono Nerd Font" [BACKGROUND]="" [EFFECTS]=yes
   [KEYBOARD]=us [KEYBOARD_VARIANT]=""
   [LOCAL_AI]=auto [ASK_MODEL]=qwen3:4b [OLLAMA_GPU]=auto [DOTFILES_REPO]="" [MOUNTS]="" [FIREWALL_ALLOW]=""
   [AWAY_AFTER]=300 [LOCK_AFTER]=600 [SCREEN_OFF_AFTER]=900

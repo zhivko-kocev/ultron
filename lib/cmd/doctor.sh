@@ -159,20 +159,19 @@ _check_idle_inhibitors() {
 }
 
 _check_jocasta() {
-  local v pin want
-  if [[ ! -e "$HOME/.local/bin/jocasta" ]]; then
-    _info "Jocasta isn't set up (optional: ultron install jocasta)"
+  local v boss
+  read -r boss _ <<<"$(boss_kind)"
+  if ! have jocasta; then
+    if [[ "$boss" != jocasta ]]; then _info "Jocasta isn't installed (ultron install agents installs it)"; fi
     return 0
   fi
-  if v=$("$HOME/.local/bin/jocasta" --version 2>/dev/null); then
+  if v=$(jocasta --version 2>/dev/null); then
     _pass "jocasta runs: $v"
   else
-    _fail "jocasta --version fails (ultron install jocasta)"
+    _fail "jocasta --version fails (ultron install agents reinstalls it)"
   fi
-  pin=$(omp_pin)
-  want=$(jocasta_omp_want)
-  if [[ -n "$want" ]]; then
-    if [[ "$pin" == "$want" ]]; then _info "omp pin $pin matches Jocasta"; else _info "omp pin ${pin:-unset} differs from Jocasta's $want (ultron install jocasta)"; fi
+  if [[ "$boss" == jocasta ]] && ! compgen -G "$HOME/.jocasta/agent/setup/*.json" >/dev/null; then
+    _fail "jocasta setup never ran: ultron install jocasta"
   fi
 }
 

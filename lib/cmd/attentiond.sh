@@ -15,14 +15,12 @@ cmd_attentiond() {
   local pids=() rc=0 log
   _attn_sway &
   pids+=($!)
-  # Jocasta may become the boss later (`ultron install jocasta`): its log is followed either way,
-  # and tail -F simply waits while the file doesn't exist.
+  # The boss may become Jocasta later: its log is followed either way, and tail -F simply waits while the
+  # file doesn't exist. Jocasta logs its questions there too (reason blocked).
   log="$(jocasta_data_dir)/notifications.jsonl"
   _attn_jocasta_log "$log" &
   pids+=($!)
-  _attn_jocasta_questions &
-  pids+=($!)
-  say "watching sway, $log and Jocasta's questions"
+  say "watching sway and $log"
   wait -n "${pids[@]}" || rc=$?
   kill "${pids[@]}" 2>/dev/null || true
   die "a watcher stopped (exit $rc)"
@@ -94,34 +92,4 @@ _attn_jocasta_log() {
     done | failed) attention_done "Thread $reason: $title" ;;
     esac
   done
-}
-
-# Jocasta's Allow and service questions go straight to notify-send ("Jocasta asks") without a
-# notifications.jsonl line (jocasta#4), so they are read off the session bus.
-# Notify's string arguments arrive in order: app_name, app_icon, summary, body.
-_attn_jocasta_questions() {
-  local line n=-1 app="" summary="" body="" s
-  dbus-monitor --session "type='method_call',interface='org.freedesktop.Notifications',member='Notify'" |
-    while IFS= read -r line; do
-      if [[ $line == *"member=Notify"* ]]; then
-        n=0 app="" summary="" body=""
-        continue
-      fi
-      ((n >= 0)) || continue
-      [[ $line =~ ^[[:space:]]+string\ \"(.*)$ ]] || continue
-      s=${BASH_REMATCH[1]%\"}
-      case $n in
-      0) app=$s ;;
-      2) summary=$s ;;
-      3)
-        body=$s
-        n=-1
-        if [[ $app == Jocasta && $summary == "Jocasta asks" ]]; then
-          attention_raise "${body:-a question is waiting}"
-        fi
-        continue
-        ;;
-      esac
-      n=$((n + 1))
-    done
 }

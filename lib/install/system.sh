@@ -17,8 +17,7 @@ _system_skip() {
 # Only files git tracks: whatever else lies in system/ (editor backups, experiments) never reaches /.
 _system_files() {
   say "Copying system files to / (root-owned, not linked)"
-  local rel src mode tmp pin content
-  pin=$(omp_pin)
+  local rel src mode tmp content
   while IFS= read -r -d '' rel; do
     rel=${rel#system/}
     if _system_skip "$rel"; then continue; fi
@@ -28,10 +27,6 @@ _system_files() {
     if [[ -x "$src" ]]; then mode=0755; fi
     content=$(<"$src")
     content=${content//@USER@/"$ULTRON_USER"}
-    if [[ "/$rel" == "$ULTRON_TOOLS_CONF" && -n "$pin" ]]; then
-      # Keep the omp version step_jocasta pinned from Jocasta's README.
-      content=$(sed -E "s/^([[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*)\"[^\"]*\"/\\1\"$pin\"/" <<<"$content")
-    fi
     tmp=$(mktemp)
     printf '%s\n' "$content" >"$tmp"
     install_root "$tmp" "/$rel" "$mode"

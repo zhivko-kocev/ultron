@@ -204,8 +204,8 @@ _agent_remove() {
   esac
 
   if ((was_boss)); then
-    conf_set BOSS omp
-    say "$name was the boss; the boss is omp again. Close the boss window (Super+W on workspace 1), then press Super+B"
+    conf_set BOSS ""
+    say "$name was the boss; the boss is $(conf_get BOSS) again. Close the boss window (Super+W on workspace 1), then press Super+B"
   fi
   ok "$name removed"
 }

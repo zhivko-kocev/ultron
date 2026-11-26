@@ -30,9 +30,10 @@ Everyday
                       timezone remote phone model
   pkg install|remove [NAME...]   packages (official and AUR)
   dev list|add|remove [TOOL]     languages and runtimes (mise)
+  dev project         tools, env and tasks for this repo, in ~/.config/mise (no file in the repo)
   webapp add|remove|list         web apps as launcher entries
   install [step...]   install or repair (steps: preflight dotfiles packages hardware aur
-                      system boot ai docker desktop agents, then doctor; on demand: jocasta net ntfy)
+                      system boot ai docker desktop agents jocasta, then doctor; on demand: net ntfy)
   install --first-boot   the default steps, then a reboot (the first login after the installer runs it)
   migrate backup|restore|clean   move a home folder between installs
 
@@ -53,6 +54,8 @@ Desktop (bound to keys)
   focus [toggle|on|off]   focus mode (agents don't move you, notifications held)
   snap                region screenshot for the boss
   shot region|full    screenshots
+  toggle awake|nightlight|record   stay awake, night light, screen recording
+  pick clip|emoji|color|font|background   clipboard history, emoji, colour picker, font, background
   close               close the focused window (asks for the boss)
   power               power menu
   lock                lock the screen

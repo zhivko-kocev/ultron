@@ -2,12 +2,12 @@
 # ultron install [step...]: install or repair the system, one idempotent step at a time.
 # Also provides run_steps and the step helpers shared with `ultron update` and `ultron doctor`.
 
-ULTRON_DEFAULT_STEPS=(preflight dotfiles packages hardware aur system boot ai docker desktop agents)
-ULTRON_EXTRA_STEPS=(jocasta net ntfy)
+ULTRON_DEFAULT_STEPS=(preflight dotfiles packages hardware aur system boot ai docker desktop agents jocasta)
+ULTRON_EXTRA_STEPS=(net ntfy)
 # Requested steps always run in this order. net/ntfy come before agents and jocasta, so every root step
-# is done (and the sudo ticket dropped) before mise and Jocasta's build run third-party code.
+# is done (and the sudo ticket dropped) before mise installs third-party tools and Jocasta's setup runs.
 ULTRON_STEP_ORDER=(preflight dotfiles packages hardware aur system boot ai docker desktop net ntfy agents jocasta)
-# Steps that use sudo. jocasta is left out: it does its one root change itself, then drops the ticket.
+# Steps that use sudo.
 ULTRON_ROOT_STEPS=(dotfiles packages hardware aur system boot ai desktop net ntfy)
 ULTRON_TOOLS_CONF=/etc/mise/conf.d/ultron-tools.toml
 # A Limine kernel entry; Limine 9+ names the kernel `path:` (older: `kernel_path:`).
@@ -41,21 +41,9 @@ toml_tool_keys() {
     }' "$1"
 }
 
-# omp_pin: the oh-my-pi version pinned in the system mise conf (empty when none).
-omp_pin() {
-  # First install: the file isn't there yet (sed would fail the pipeline).
-  [[ -r "$ULTRON_TOOLS_CONF" ]] || return 0
-  sed -n -E 's/^[[:space:]]*oh-my-pi[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$ULTRON_TOOLS_CONF" | head -n1
-}
-
-# jocasta_omp_want: the omp version Jocasta's README says it was checked against (empty when none).
-jocasta_omp_want() {
-  { grep -oE 'checked against omp [0-9]+(\.[0-9]+)*' "$JOCASTA_DIR/README.md" 2>/dev/null || true; } |
-    head -n1 | grep -oE '[0-9]+(\.[0-9]+)*$' || true
-}
-
-# set_omp_settings: the omp settings ultron needs; `jocasta setup` and a restored config may reset them,
-# so the agents step, the jocasta step and `migrate restore` reapply them.
+# set_omp_settings: the omp settings a boss other than Jocasta needs (Jocasta's `jocasta setup` writes
+# both into omp's config itself); a restored config may lack them, so the agents step and
+# `migrate restore` reapply them.
 #  - commit role (local AI on only): the local model first, then whatever non-local models were there.
 #    modelRoles is one record setting (`modelRoles.commit` isn't a key), so it's read, merged, written back.
 #  - power.sleepPrevention off: omp's default ("idle") holds a logind idle inhibitor while it runs, and
@@ -63,7 +51,9 @@ jocasta_omp_want() {
 #    suspends on idle, so there is nothing for omp to prevent.
 set_omp_settings() {
   have omp || return 0
-  local roles new
+  local roles new boss
+  read -r boss _ <<<"$(boss_kind)"
+  [[ "$boss" != jocasta ]] || return 0
   if local_ai_on; then
     roles=$(omp config get modelRoles 2>/dev/null) || roles='{}'
     if new=$(jq -c --arg m "ollama/$(ask_model)" '
@@ -167,12 +157,12 @@ cmd_install() {
       _in_list "$s" "${ULTRON_DEFAULT_STEPS[@]}" || continue
     fi
     steps+=("$s")
-    if _in_list "$s" "${ULTRON_ROOT_STEPS[@]}" jocasta; then last_root=$s; fi
+    if _in_list "$s" "${ULTRON_ROOT_STEPS[@]}"; then last_root=$s; fi
   done
   say "Running: ${steps[*]}"
   if [[ -n "$last_root" ]]; then
     confirm_checkout
-    if [[ "$last_root" != jocasta ]]; then sudo_keepalive; fi
+    sudo_keepalive
   fi
   for s in "${steps[@]}"; do
     run_steps "$s"

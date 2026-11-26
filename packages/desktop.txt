@@ -32,8 +32,11 @@ imv
 mpv
 zathura
 zathura-pdf-mupdf
+gammastep
+wf-recorder
 noto-fonts
 noto-fonts-emoji
-ttf-jetbrains-mono
+unicode-emoji
+ttf-jetbrains-mono-nerd
 adwaita-icon-theme
 mesa

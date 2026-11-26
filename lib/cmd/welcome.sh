@@ -2,8 +2,17 @@
 # ultron welcome [--once]: the first-login guide. --once shows it only the first time.
 
 _welcome_text() {
-  local boss
+  local boss intro
   boss=$(boss_kind)
+  if [[ "${boss%% *}" == jocasta ]]; then
+    intro="Workspace 1 holds your boss, Jocasta: you talk to its boss pane, and it runs
+agent threads for your projects (~/Projects). Super+B takes you there. The
+first step: type /login in the boss pane to sign in."
+  else
+    intro="Workspace 1 holds your boss agent ($boss); Super+B takes you there. The first
+time, sign it in: omp asks by itself, in claude type /login, other agents
+print their own steps."
+  fi
   cat <<EOF
 Welcome to ultron.
 
@@ -12,9 +21,7 @@ Welcome to ultron.
   Super+Space       open an app            Super+Return   a terminal
   Super+1 … 0       go to a workspace      Super+W        close a window
 
-Workspace 1 holds your boss agent ($boss); Super+B takes you there. The first
-time, sign it in: omp asks by itself, in claude type /login, other agents
-print their own steps.
+$intro
 
 Wi-Fi, Bluetooth, sound, screens, keyboard layout, browser, git identity
 and time zone: menu, then Setup.

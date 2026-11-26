@@ -3,7 +3,7 @@
 A lightweight Arch Linux desktop built for working with coding agents. Install it, sign your agent in, and work: you don't need to know Arch, pacman or sway. If you do, everything is a plain file you can change.
 
 - **Agent-first.** One agent, the boss, lives on workspace 1. Agents show you diffs, web pages, files and running terminals on their own workspaces, and ultron brings you to an agent only when it needs you *and* you've stopped typing. Away from the desk, the question goes to your phone.
-- **Any agent.** [omp](https://github.com/can1357/oh-my-pi) ships by default; Claude Code, Codex, Gemini CLI and opencode are one command away, and any other CLI can be added. [Jocasta](https://github.com/zhivko-kocev/jocasta) is supported as a multi-thread boss.
+- **Any agent.** [Jocasta](https://github.com/zhivko-kocev/jocasta) is the default boss: it runs many [omp](https://github.com/can1357/oh-my-pi) sessions as threads for your projects. omp, Claude Code, Codex, Gemini CLI and opencode can be the boss instead (one command away), and any other CLI can be added.
 - **Safe enough to let agents work.** Root needs your password in a popup that shows the exact command, every time. Docker is rootless. The disk is encrypted. Every package change has a snapshot you can boot.
 - **Light.** sway, foot, fuzzel, mako and a bash status bar: about 600 MB of RAM at an idle desktop before any agent starts ([measured](docs/baseline.md)). No daemons you didn't ask for.
 - **Yours.** One menu for everything (Super+Alt+Space), six themes, and a `~/.config/ultron/` folder where your settings, keys, packages and overrides live without forking anything.
@@ -61,7 +61,7 @@ From a terminal, `ultron` does everything the menu does:
     ultron theme                  # switch theme
     ultron setup wifi             # also: bluetooth audio display keyboard browser git dotfiles …
 
-Optional extras: `ultron install net` (Tailscale remote access), `ultron install ntfy` (phone alerts), `ultron install jocasta`.
+Optional extras: `ultron install net` (Tailscale remote access), `ultron install ntfy` (phone alerts).
 
 **Undoing a bad update:** at the boot menu open Snapshots, pick one from before the update and boot it. If it's good, run `sudo limine-snapper-restore` there and reboot.
 
@@ -79,7 +79,7 @@ What the encryption, the sudo popup and rootless Docker protect you from, and wh
 
 ## What's inside
 
-Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · SwayFX (stock sway as the fallback) · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise · ollama (on by itself with a graphics card of about 4 GB or more) · Tailscale and ntfy (optional).
+Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · SwayFX (stock sway as the fallback) · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise (also per project, without a file in the repo) · ollama (on by itself with a graphics card of about 4 GB or more) · Tailscale and ntfy (optional) · a zsh starter with starship, zoxide, eza, bat, lazygit and lazydocker · in the menu: stay awake, night light, screen recording, colour and emoji pickers, font and background switchers.
 
 | Folder | |
 |---|---|

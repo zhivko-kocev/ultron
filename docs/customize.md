@@ -23,11 +23,11 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 
 | Setting | Default | What it does |
 |---|---|---|
-| `BOSS` | `omp` | The agent in the boss window on workspace 1: any command, e.g. `claude`, `codex`, `jocasta` |
+| `BOSS` | `jocasta` | The agent in the boss window on workspace 1: any command, e.g. `omp`, `claude`, `codex` |
 | `BROWSER` | `chromium` | The everyday browser (Super+Shift+Return, links) |
 | `THEME` | `gruvbox-dark` | Colour theme |
-| `FONT` | `JetBrainsMono Nerd Font` | Font of the terminals, the launcher, notifications and the bar |
-| `BACKGROUND` | empty | Image behind the windows (a file path); empty = the theme's background colour |
+| `FONT` | `JetBrainsMono Nerd Font` | Font of the terminals, the launcher, notifications and the bar (menu: **Style → Font**, monospaced fonts) |
+| `BACKGROUND` | empty | Image behind the windows (a file path, `~/` allowed); empty = the theme's background colour (menu: **Style → Background** lists `~/.config/ultron/backgrounds` and `~/Pictures`) |
 | `EFFECTS` | `yes` | Rounded corners, shadows and window animations with SwayFX (built from the AUR; it replaces sway). Effects start at the next login after SwayFX is installed. When it doesn't build, or an update needs it rebuilt, stock sway runs until `ultron update` rebuilds it. `no` goes back to stock sway |
 | `KEYBOARD`, `KEYBOARD_VARIANT` | `us`, empty | Keyboard layouts, e.g. `us,de` |
 | `LOCAL_AI` | `auto` | Run a local model with ollama: `auto` = when a graphics card with about 4 GB of memory or more is found, `yes` = always, `no` = never (removes it from the install) |
@@ -66,7 +66,7 @@ assign [app_id="^org.telegram.desktop$"] workspace 7:chat
 
 To replace one of ultron's keys, bind the same key again in your file: write `bindsym --no-warn $mod+…` so sway doesn't flag the override. **Setup → Display** in the menu creates a monitor file listing your outputs.
 
-The workspace names are `1:boss 2:review 3:web 4:watch 5:code 6:term 7:chat 8 9 10:sys`. Workspaces 2, 3 and 4 are where agents open things for you; keep them free.
+The workspace names are `1:boss 2:review 3:web 4:watch 5:code 6:term 7:chat 8 9:browse 10:sys`. Workspaces 2, 3 and 4 are where agents open things for you; keep them free.
 
 ## Terminal, launcher, notifications, lock screen, GTK
 
@@ -100,7 +100,28 @@ See [agents.md](agents.md). Short version: `ultron agent add claude`, `ultron ag
 
 Set `DOTFILES_REPO` (or answer the question at install time). ultron clones it to `~/Projects/dotfiles` and runs its `install.sh` early in the install, so your repo can ship any of the files above (for example a stow package containing `.config/ultron/conf.d/10-mine.conf`, `packages.txt` and `sway/mine.conf`) and a new machine comes up exactly like your last one.
 
-Without dotfiles, ultron gives you a starter zsh config (`~/.zshrc`) that is yours to edit.
+Without dotfiles, ultron gives you a starter zsh config (`~/.zshrc`) that is yours to edit: the starship prompt (`~/.config/starship.toml`), `z FOLDER` (zoxide) to jump to a folder you visited, `ls`/`lsa`/`lt`/`lta` through eza, `ff` to find a file with a preview (fzf and bat), `g`, `gcm`, `gcam`, `gcad` for git, `lg` for lazygit, `d` for docker, and the project hook below.
+
+## Project tools without touching the repo
+
+Some repositories can't hold a `mise.toml` (a client's repo, say). Keep the project's tools, environment and tasks in `~/.config/mise/config.NAME.toml` instead, where NAME is the repository's folder name: inside the repository run `ultron dev project`, which creates the file (with `[tools]`, `[env]` and example `test` and `verify` tasks) and opens it in your editor.
+
+```
+# ~/.config/mise/config.acme-api.toml
+[tools]
+node = "22"
+
+[env]
+API_URL = "http://localhost:8080"
+
+[tasks.verify]
+run = "npm run lint && npm test"
+```
+
+- Your shell loads it inside the repository (a hook in the starter `~/.zshrc` adds NAME to `MISE_ENV` on every change of folder; copy the `_ultron_mise_env` block into your own `.zshrc` if you have one).
+- Every git worktree of the repository shares it: NAME comes from the main repository, not the worktree's folder.
+- Jocasta's threads load it too.
+- The limit: a process that changes folder by itself (an editor, a long-running shell script) keeps the file of the project it started in.
 
 ## Local model tuning
 

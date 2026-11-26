@@ -31,6 +31,7 @@ Super+Left drag — Move a floating window
 Super+Right drag — Resize a floating window
 Super+Ctrl+L — Lock the screen
 Super+Ctrl+V — Clipboard history
+Super+Ctrl+E — Emoji picker (copies and types it)
 Super+Ctrl+A — Audio mixer (pavucontrol)
 Super+Ctrl+U — ultron update in a terminal on workspace 10
 Super+Comma — Dismiss the notification

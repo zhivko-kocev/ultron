@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # ultron status: swaybar status line (i3bar JSON), one update every 2 s.
-# It runs for as long as the session does, so the loop stays in bash builtins: per tick it starts
-# only wpctl, plus pgrep (Jocasta boss) and the periodic probes (ollama every 10 s, Tailscale every 30 s).
+# It runs for as long as the session does, so the loop stays in bash builtins: per tick it starts only
+# wpctl, plus the periodic probes (Jocasta every 6 s when it's the boss, ollama every 10 s, Tailscale every 30 s).
 
 _blocks=()
 
@@ -20,7 +20,7 @@ cmd_status() {
   local -A col=([MUTED]="#928374" [URGENT]="#fb4934" [ACCENT]="#fabd2f" [OK]="#b8bb26")
   _kv_read "$ULTRON_GEN/colors" col
 
-  local tick=0 first=1 boss="" local_ai="" ai="" ts="" ts_on=0 joc_up=1
+  local tick=0 first=1 boss="" local_ai="" ai="" ts="" ts_on=0 joc_up=1 joc_need=0 joc_run=0
   local prev_total=0 prev_idle=0 total idle cpu=0 user nice sys idl iow irq sirq steal _rest
   local key val _unit mem_total mem_avail used10 out vol clock bat cap bstate f line b waiting fresh=()
 
@@ -47,7 +47,13 @@ cmd_status() {
       fi
     fi
     if [[ "$boss" == jocasta ]] && ((tick % 3 == 0)); then
-      if jocasta_running; then joc_up=1; else joc_up=0; fi
+      # Exit 0 while Jocasta answers (3 when it isn't running). needsYou and underway are thread counts.
+      joc_up=0 joc_need=0 joc_run=0
+      if out=$(timeout 2 jocasta status --json 2>/dev/null); then
+        joc_up=1
+        if [[ "$out" =~ \"needsYou\":[[:space:]]*([0-9]+) ]]; then joc_need=${BASH_REMATCH[1]}; fi
+        if [[ "$out" =~ \"underway\":[[:space:]]*([0-9]+) ]]; then joc_run=${BASH_REMATCH[1]}; fi
+      fi
     fi
 
     # CPU from the /proc/stat difference.
@@ -104,10 +110,14 @@ cmd_status() {
 
     _blocks=()
     if [[ "$boss" == jocasta ]]; then
+      # The queue counts waiting windows, Jocasta its waiting threads (several can share the boss window).
+      if ((joc_need > waiting)); then waiting=$joc_need; fi
       if ((!joc_up)); then
         _blk boss "J ✗" "${col[URGENT]}"
       elif ((waiting)); then
         _blk boss "J ● $waiting need you" "${col[URGENT]}"
+      elif ((joc_run)); then
+        _blk boss "J $joc_run running" "${col[MUTED]}"
       else
         _blk boss "J" "${col[MUTED]}"
       fi

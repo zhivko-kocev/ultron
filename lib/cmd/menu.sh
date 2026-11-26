@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ultron menu [SECTION]: one menu for everything (Super+Alt+Space). Esc goes back one level.
-# SECTION (install, remove, setup, style, screenshot, system) opens that part directly;
+# SECTION (install, remove, setup, style, toggle, capture, system) opens that part directly;
 # Esc there closes the menu.
 
 # Navigation is passed in flags, not exit codes, so errexit stays on inside every step:
@@ -167,7 +167,7 @@ _menu_remove() {
   esac
 }
 
-# ---- Setup, Style, Screenshot, System -----------------------------------------------------------
+# ---- Setup, Style, Toggle, Capture, System -------------------------------------------------------
 
 _menu_setup() {
   local c topic items=("Wi-Fi/Network")
@@ -196,20 +196,56 @@ _menu_setup() {
   _menu_do setup "$topic"
 }
 
+# _menu_mark ON LABEL: LABEL with " ✓" when ON is 0 (a switch that is on).
+_menu_mark() {
+  if (($1 == 0)); then printf '%s ✓\n' "$2"; else printf '%s\n' "$2"; fi
+}
+
 _menu_style() {
-  local c
-  c=$(printf '%s\n' "Theme…" | pick Style --lines 1) || {
+  local c fx on=1
+  conf_var fx EFFECTS
+  if [[ $fx == yes ]]; then on=0; fi
+  c=$({
+    printf '%s\n' "Theme…" "Font…" "Background…"
+    _menu_mark "$on" Effects
+  } | pick Style --lines 4) || {
     _MENU_UP=1
     return 0
   }
-  case $c in
+  case ${c% ✓} in
   "Theme…") _menu_do theme ;;
+  "Font…") _menu_do pick font ;;
+  "Background…") _menu_do pick background ;;
+  Effects)
+    # SwayFX replaces sway (or the other way round): a system change, so it runs in a terminal.
+    if ((on == 0)); then fx=no; else fx=yes; fi
+    conf_set EFFECTS "$fx"
+    _menu_term "Effects: EFFECTS=$fx, then log out and in" --hold install desktop
+    ;;
   esac
 }
 
-_menu_screenshot() {
+_menu_toggle() {
   local c
-  c=$(printf '%s\n' Region "Full screen" "For the boss" | pick Screenshot --lines 3) || {
+  c=$({
+    _menu_mark "$([[ -e "$R/focus" ]] && echo 0 || echo 1)" "Focus mode"
+    _menu_mark "$([[ -e "$R/awake" ]] && echo 0 || echo 1)" "Stay awake"
+    _menu_mark "$(pgrep -x gammastep >/dev/null 2>&1 && echo 0 || echo 1)" "Night light"
+  } | pick Toggle --lines 3) || {
+    _MENU_UP=1
+    return 0
+  }
+  case ${c% ✓} in
+  "Focus mode") _menu_do focus toggle ;;
+  "Stay awake") _menu_do toggle awake ;;
+  "Night light") _menu_do toggle nightlight ;;
+  esac
+}
+
+_menu_capture() {
+  local c rec="Record screen"
+  if pgrep -x wf-recorder >/dev/null 2>&1; then rec="Stop recording"; fi
+  c=$(printf '%s\n' Region "Full screen" "For the boss" "$rec" Colour Emoji | pick Capture --lines 6) || {
     _MENU_UP=1
     return 0
   }
@@ -217,6 +253,9 @@ _menu_screenshot() {
   Region) _menu_do shot region ;;
   "Full screen") _menu_do shot full ;;
   "For the boss") _menu_do snap ;;
+  "Record screen" | "Stop recording") _menu_do toggle record ;;
+  Colour) _menu_do pick color ;;
+  Emoji) _menu_do pick emoji ;;
   esac
 }
 
@@ -245,8 +284,8 @@ _menu_update() {
 
 _menu_top() {
   local c
-  c=$(printf '%s\n' Apps Keys Boss "New thread" "Install ▸" "Remove ▸" "Setup ▸" "Style ▸" \
-    Update Doctor "Focus mode" "Screenshot ▸" "System ▸" | pick ultron --lines 13) || {
+  c=$(printf '%s\n' Apps Keys Boss "New thread" "Install ▸" "Remove ▸" "Setup ▸" "Style ▸" "Toggle ▸" \
+    Update Doctor "Capture ▸" "System ▸" | pick ultron --lines 13) || {
     _MENU_DONE=1
     return 0
   }
@@ -255,7 +294,8 @@ _menu_top() {
   "Remove ▸") _menu_section remove ;;
   "Setup ▸") _menu_section setup ;;
   "Style ▸") _menu_section style ;;
-  "Screenshot ▸") _menu_section screenshot ;;
+  "Toggle ▸") _menu_section toggle ;;
+  "Capture ▸") _menu_section capture ;;
   "System ▸") _menu_section system ;;
   *)
     _MENU_DONE=1
@@ -266,7 +306,6 @@ _menu_top() {
     "New thread") _menu_do task ;;
     Update) _menu_update ;;
     Doctor) _menu_term Doctor --hold doctor ;;
-    "Focus mode") _menu_do focus toggle ;;
     esac
     ;;
   esac
@@ -276,8 +315,8 @@ cmd_menu() {
   local section=${1:-}
   if [[ -n "$section" ]]; then
     case $section in
-    install | remove | setup | style | screenshot | system) _menu_section "$section" ;;
-    *) die "unknown menu section '$section' (sections: install remove setup style screenshot system)" ;;
+    install | remove | setup | style | toggle | capture | system) _menu_section "$section" ;;
+    *) die "unknown menu section '$section' (sections: install remove setup style toggle capture system)" ;;
     esac
     return 0
   fi

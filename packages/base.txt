@@ -9,6 +9,12 @@ fzf
 zsh
 zsh-autosuggestions
 zsh-syntax-highlighting
+starship
+zoxide
+eza
+bat
+lazygit
+lazydocker
 nano
 btop
 man-db

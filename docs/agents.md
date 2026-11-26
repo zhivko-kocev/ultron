@@ -19,7 +19,7 @@ Agents learn all of this from one guide: `ultron guide` prints it, and `ultron i
 ultron agent boss claude
 ```
 
-Then close the boss window (Super+W on workspace 1) and press Super+B. Any command works as the boss (`ultron conf set BOSS "<command>"`); `omp` is the default and ships with ultron.
+Then close the boss window (Super+W on workspace 1) and press Super+B. Any command works as the boss (`ultron conf set BOSS "<command>"`); `jocasta` is the default ([jocasta.md](jocasta.md)), and `omp` ships with ultron too.
 
 ## Adding agents
 

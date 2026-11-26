@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# ultron dev list|add|remove [TOOL]: programming languages and toolchains, installed for your
+# ultron dev list|add|remove [TOOL] | project: programming languages and toolchains, installed for your
 # user through mise (no root, no system packages). New terminals pick them up.
+# `project`: tools, env and tasks for the current repository without a file in it (docs/customize.md).
 
 _DEV_TOOLS=(node bun deno python go rust java ruby php elixir zig dotnet)
 
@@ -71,6 +72,35 @@ _dev_remove() {
   ok "$tool removed. New terminals no longer have it"
 }
 
+# _dev_project: open ~/.config/mise/config.NAME.toml for the repository here (NAME = its main folder's name,
+# the same for every worktree), created with empty sections first. The shell hook in ~/.zshrc and Jocasta's
+# threads load it inside that repository.
+_dev_project() {
+  local common name file
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "run this inside a git repository"
+  name=$(basename "$(dirname "$common")")
+  file="$HOME/.config/mise/config.$name.toml"
+  if [[ ! -e "$file" ]]; then
+    mkdir -p "$(dirname "$file")"
+    cat >"$file" <<EOF
+# Tools, environment and tasks for the $name repository and its worktrees, kept outside the repository.
+# Loaded by your shell inside it and by Jocasta's threads. Uncomment the tasks you have: Jocasta runs verify (else test).
+[tools]
+
+[env]
+
+# [tasks.test]
+# run = "npm test"
+
+# [tasks.verify]
+# run = "npm run lint && npm test"
+EOF
+    ok "Created $file"
+  fi
+  ${EDITOR:-nano} "$file"
+  ok "New terminals in $name use it; in this one, run: exec \$SHELL"
+}
+
 cmd_dev() {
   local sub=${1:-list}
   _dev_need_mise
@@ -84,6 +114,7 @@ cmd_dev() {
     [[ -n "${2:-}" ]] || die "usage: ultron dev remove TOOL"
     _dev_remove "$2"
     ;;
-  *) die "usage: ultron dev list | add TOOL | remove TOOL" ;;
+  project) _dev_project ;;
+  *) die "usage: ultron dev list | add TOOL | remove TOOL | project" ;;
   esac
 }

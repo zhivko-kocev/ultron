@@ -3,7 +3,7 @@
 # Showing never moves the user: the workspace is marked in the bar ("new 2") and Super+A goes there.
 #   show review [--cwd D] [--hold] [--tag T] [-- CMD...]   terminal on 2 (default: hunk diff --watch)
 #   show watch [--cwd D] [--title T] [--tag T] -- CMD...   terminal on 4 that stays open
-#   show web URL [--ws 2|3|4] [--tag T]                      preview Chromium window (default 3; review pages 2, board 4)
+#   show web URL [--ws 2|3|4] [--tag T]                      preview Chromium window (default workspace 3)
 #   show file PATH [--tag T]                                 image, PDF, video, audio or text on 2; HTML as web
 #   show code FILE[:LINE[:COL]]                              the editor (Zed, workspace 5)
 #   show list                                                ID, workspace, tag and title of each window opened here
@@ -166,13 +166,6 @@ _show_term() {
   _show_placed "$n" "$id" "$app_id" "$tag" "$cwd"
 }
 
-# _url_path URL: the path of a URL ("/" when it has none).
-_url_path() {
-  local p=${1#*://}
-  if [[ "$p" == */* ]]; then p="/${p#*/}"; else p=/; fi
-  printf '%s\n' "$p"
-}
-
 _show_web() {
   local url="" n="" tag=${ULTRON_TAG:-${JOCASTA_THREAD:-}}
   while (($#)); do
@@ -196,13 +189,7 @@ _show_web() {
   done
   [[ -n "$url" ]] || die "usage: ultron show web URL [--ws 2|3|4] [--tag T]"
   tag=$(_show_tag "$tag")
-  if [[ -z "$n" ]]; then
-    case $(_url_path "$url") in
-    /brief/thread-* | /brief/pr-*) n=2 ;;
-    /board | /board[/?#]*) n=4 ;;
-    *) n=3 ;;
-    esac
-  fi
+  n=${n:-3}
 
   local before id="" pid cand i
   before=" $(sway_ids true | tr '\n' ' ') "

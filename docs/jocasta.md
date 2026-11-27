@@ -33,7 +33,7 @@ The first thing to do in a fresh boss pane is `/login` (omp's sign-in).
 
 ## Pages
 
-From Jocasta 0.2 its pages are its own windows (`jocasta view <id>`): sway puts review, `show` and morning-brief windows (app ids `jocasta-review`, `jocasta-show`, `jocasta-brief`) on workspace 2 and the board (`jocasta-board`) on 4, without taking focus; the bar marks the workspace and Super+A reaches them like any shown window. Jocasta 0.1 opened its pages as local web pages, which ultron's link router still sends to the preview Chromium on the same workspaces. Other links go to your browser on 9.
+Jocasta's pages are its own windows (`jocasta view <id>`, from Jocasta 0.2): sway puts review, `show` and morning-brief windows (app ids `jocasta-review`, `jocasta-show`, `jocasta-brief`) on workspace 2 and the board (`jocasta-board`) on 4, without taking focus; the bar marks the workspace and Super+A reaches them like any shown window. Links in them go to your browser on 9.
 
 ## Keys
 

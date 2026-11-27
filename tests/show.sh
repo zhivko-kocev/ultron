@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# show: windows land on 2 / 3 / 4 (review pages on 2, the board on 4) without moving the user; the bar marks
+# show: windows land on 2 / 3 / 4 (web pages on 3 unless --ws says otherwise) without moving the user; the bar marks
 # their workspace; the registry lists ids and tags; close by id or tag; attentiond closes tagged windows whose
 # folder is gone and moves agents' visible browsers to 3. sway and the apps are stubs over a canned tree.
 # shellcheck disable=SC2016 # stub bodies are scripts of their own: their $ must reach the file unexpanded.
@@ -53,11 +53,11 @@ review=$(jq -r '.. | objects | select((.app_id? // "") | startswith("ultron-revi
 [[ $(jq -r --argjson id "$review" '.. | objects | select(.id? == $id) | .name' "$t/tree.json") == "[t1] true" ]] ||
   fail "the tag isn't in the terminal's title"
 want '^opened on workspace 4 ' "$(ultron show watch --cwd "$t/wt2" --tag t2 --title logs -- tail -f x)"
-want '^opened on workspace 2 \(id web:[0-9]+\)$' "$(ultron show web 'http://127.0.0.1:47400/brief/thread-ab?t=1')"
+want '^opened on workspace 2 \(id web:[0-9]+\)$' "$(ultron show web 'http://127.0.0.1:47400/x?t=1' --ws 2)"
 web=$(<"$t/next")
 logged sway "[con_id=$web] move container to workspace \"2:review\""
 logged sway "[con_id=$web] layout tabbed"
-grep -qF -- "--user-data-dir=$HOME/.local/share/ultron/chromium-preview --profile-directory=UltronPreview --password-store=basic --no-first-run --app=http://127.0.0.1:47400/brief/thread-ab?t=1" \
+grep -qF -- "--user-data-dir=$HOME/.local/share/ultron/chromium-preview --profile-directory=UltronPreview --password-store=basic --no-first-run --app=http://127.0.0.1:47400/x?t=1" \
   "$t/setsid.log" || fail "the preview browser's command line"
 # Its app_id (chrome-<host>__-UltronPreview, chrome-<path>-UltronPreview for file://) is placed on 3 without focus
 # before show moves it; web apps (…-Default) are left alone.
@@ -70,7 +70,6 @@ done
 a=chrome-app.example.com__-Default
 if [[ $a =~ -UltronPreview$ ]]; then fail "the preview rule takes a web app"; fi
 want '^opened on workspace 3 ' "$(ultron show web http://localhost:3000/)"
-want '^opened on workspace 4 ' "$(ultron show web http://127.0.0.1:47400/board)"
 want '^opened on workspace 4 ' "$(ultron show web http://localhost:3000/x --ws 4)"
 printf '\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\1\0\0\0\1\x08\x06\0\0\0\x1f\x15\xc4\x89' >"$t/a.png"
 want '^opened on workspace 2 \(id con:[0-9]+\)$' "$(ultron show file "$t/a.png" --tag t1)"
@@ -95,7 +94,7 @@ ultron show review -- true >/dev/null
 [[ ! -s "$R/new" ]] || fail "the focused workspace was marked"
 
 list=$(ultron show list)
-[[ $(wc -l <<<"$list") == 9 ]] || fail "list: $list"
+[[ $(wc -l <<<"$list") == 8 ]] || fail "list: $list"
 want $'ultron-review-[0-9]+\t2:review\tt1\t\\[t1\\] true' "$list"
 [[ $(grep -c $'\tt1\t' <<<"$list") == 2 ]] || fail "two windows carry tag t1: $list"
 out=$(ultron show close --tag t1)

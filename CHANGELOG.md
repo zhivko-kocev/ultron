@@ -2,6 +2,14 @@
 
 What changed for people using ultron, newest first. Each version is a `v*` tag; from 0.3.0 on, its release page has the installer ISO.
 
+## 0.3.1
+
+- Jocasta 0.2's pages are its own windows: review, `show` and morning-brief windows land on workspace 2 and the board on 4, without taking focus, marked in the bar like anything an agent shows you. The routing for Jocasta 0.1's web pages is gone.
+- With phone alerts set up (`ultron install ntfy`), every phase change of a Jocasta thread reaches your phone as one line (`acme-api/refunds: review · $1.84`).
+- Agents can show a plan or a flow as a Jocasta window with `jocasta brief open spec.json` (the ultron skill says how).
+- Closing the windows shown on a workspace clears its `new` mark in the bar.
+- Dim text in the bar stays readable on themes whose muted colour is too dark (Nord).
+
 ## 0.3.0
 
 **Install like a product**

@@ -59,7 +59,7 @@ _attn_ws_focus() {
   alive=" ${alive//$'\n'/ } "
   for f in "$_ATTN_DIR"/*; do
     [[ -f "$f" && "$alive" != *" ${f##*/} "* ]] || continue
-    rm -f "$f"
+    attention_seen "${f##*/}"
   done
   show_sweep "$alive"
 }

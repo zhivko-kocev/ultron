@@ -35,6 +35,9 @@ if [[ -x $generator ]]; then
 fi
 
 mkdir -p "$XDG_RUNTIME_DIR/ultron"
+# The runtime folder outlives a logout (lingering keeps it): marks and requests of the last session point at
+# windows that are gone.
+rm -rf "$XDG_RUNTIME_DIR/ultron/"{new,attention,shown,shown-last}
 # greetd starts sessions in /; everything sway execs (the boss, terminals) inherits this folder.
 cd "$HOME"
 # A VM may have no GPU wlroots accepts (SwayFX renders through GLES); software rendering is fine there.

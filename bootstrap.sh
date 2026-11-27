@@ -583,7 +583,7 @@ finish() {
     say "Cloning ultron ($REPO_REF) into the new system"
     # runuser keeps root's HOME (mode 0700), whose git config the user can't read: give git the user's HOME.
     if arch-chroot /mnt runuser -u "$USER_NAME" -- env HOME="$home" \
-      git clone --branch "$REPO_REF" "$REPO_URL" "$home/Projects/ultron"; then
+      git -c advice.detachedHead=false clone --branch "$REPO_REF" "$REPO_URL" "$home/Projects/ultron"; then
       cloned=1
       # A tag (the ISO's ULTRON_REF) leaves a detached HEAD, which `ultron update` can't pull: put the same
       # commit on a local branch that follows the repo's default branch.

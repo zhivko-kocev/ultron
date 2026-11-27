@@ -19,7 +19,10 @@ cmd_jump() {
   exec 9>"$R/jump.lock"
   if ! flock -w 120 9 || ! wait_idle 60; then
     _jump_mark
-    desktop_notify -u critical "An agent needs you" "Press Super+A"
+    # The oldest request's notification turns into this one; it goes once the user reaches that window.
+    local con
+    con=$(_attn_oldest)
+    if [[ -n "$con" ]]; then attention_toast "$con" "An agent needs you" "Press Super+A" -u critical; fi
     return 0
   fi
   # Nothing waits any more (the user got there first), or they can't be moved now.

@@ -207,8 +207,11 @@ _show_web() {
   local before id="" pid cand i
   before=" $(sway_ids true | tr '\n' ' ') "
   mkdir -p "$PREVIEW_PROFILE"
-  # basic: the preview profile never touches the keyring the everyday browser uses.
-  detach chromium --user-data-dir="$PREVIEW_PROFILE" --password-store=basic --no-first-run --app="$url" 8>&-
+  # basic: the preview profile never touches the keyring the everyday browser uses. The profile directory gives
+  # its windows the Wayland app_id chrome-<host>__-UltronPreview (Chromium ignores --class there): sway's assign
+  # and no_focus rules put them on workspace 3 unfocused, so nothing flashes where the user is.
+  detach chromium --user-data-dir="$PREVIEW_PROFILE" --profile-directory=UltronPreview --password-store=basic \
+    --no-first-run --app="$url" 8>&-
   # A running preview browser opens the window itself; either way it belongs to the profile's first process.
   for ((i = 0; i < 200; i++)); do
     pid=$(pgrep -o -f -- "--user-data-dir=$PREVIEW_PROFILE" || true)

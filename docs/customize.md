@@ -82,7 +82,7 @@ Each has an override file that ultron never overwrites:
 
 ## Packages
 
-Install from the menu (**Install → Package**) or `ultron pkg install`: official and AUR packages in one searchable list. What you install is recorded in `~/.config/ultron/packages.txt`, and `ultron install` on a new machine installs that list again.
+Install from the menu (**Install → Package**) or `ultron pkg install`: official and AUR packages in one searchable list. What you install is recorded in `~/.config/ultron/packages.txt`, and `ultron install` on a new machine installs that list again. AUR builds make no `*-debug` packages (`/etc/makepkg.conf.d/ultron.conf`), and ultron runs yay with Gradle's daemon off, so a build leaves nothing running.
 
 Languages and runtimes: **Install → Dev tool** or `ultron dev add python` (managed by mise, per user, no root).
 

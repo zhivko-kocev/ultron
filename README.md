@@ -35,7 +35,7 @@ Coming from another Linux install on the same disk? [docs/migrate.md](docs/migra
 | Super+K | every key, searchable |
 | Super+Space / Super+Return | apps / terminal |
 | Super+B | the boss agent |
-| Super+A | the oldest agent that needs you, else the newest window an agent showed you; Super+Backspace goes back to your last workspace |
+| Super+A | the oldest agent that needs you, else the newest window agents showed you that you haven't looked at; Super+Backspace goes back to your last workspace |
 | Super+M | focus mode: agents can't move you, notifications wait |
 | Super+Shift+S | screenshot a region and hand it to the boss |
 

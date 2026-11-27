@@ -17,12 +17,12 @@ stub() {
   chmod +x "$t/bin/$1"
 }
 stub swaymsg 'if [[ $1 == -t ]]; then case $2 in get_tree) cat "$T/tree.json" ;; get_workspaces) cat "$T/ws.json" ;; esac; else echo "$*" >>"$T/sway.log"; fi'
-stub notify-send 'echo "$*" >>"$T/notify.log"'
+stub notify-send 'echo "$*" >>"$T/notify.log"; if [[ " $* " == *" -p "* ]]; then echo 7; fi'
 stub setsid 'echo "$*" >>"$T/setsid.log"'
 stub pgrep 'exit 1'
-stub makoctl 'exit 0'
+stub makoctl 'echo "$*" >>"$T/mako.log"'
 echo '[{"name":"5:code","focused":true}]' >"$t/ws.json"
-touch "$t/sway.log" "$t/notify.log" "$t/setsid.log"
+touch "$t/sway.log" "$t/notify.log" "$t/setsid.log" "$t/mako.log"
 
 # mktree FOCUSED_CON: windows 10 (boss, 1:boss), 40 (2:review), 20 (6:term), 21 (7:chat).
 mktree() {
@@ -66,11 +66,17 @@ grep -q 'ultron jump$' "$t/setsid.log" || fail "no jump started"
 mktree 40
 raise 40 seen
 [[ ! -e "$R/attention/40" ]] || fail "the focused window's request stayed"
-# The CLI: an agent outside any window is the boss's request.
+# The CLI: an agent outside any window is the boss's request. Its notification is replaced by a repeat and
+# dismissed with the request.
 mktree 0
 ultron attention --raise boss
 [[ $(sed -n 3p "$R/attention/10") == 1:boss ]] || fail "a raise from outside a window didn't fall back to the boss"
-rm "$R/attention/10"
+[[ $(sed -n 4p "$R/attention/10") == 7 ]] || fail "the request didn't keep its notification's id"
+ultron attention --raise 'boss again'
+logged notify '-a ultron -p -r 7 An agent needs you boss again'
+bash -c 'source lib/common.sh; source lib/cmd/attention.sh; attention_seen 10'
+[[ ! -e "$R/attention/10" ]] || fail "the seen request stayed"
+logged mako 'dismiss -n 7'
 
 # Super+A walks the queue, then goes to the newest shown window, then says nothing needs you.
 ultron attention
@@ -84,6 +90,18 @@ echo 2 >"$R/new"
 ultron attention
 logged sway 'workspace "2:review"'
 logged sway '[con_id=40] focus'
+# The newest shown window was seen already (its workspace isn't marked): the newest shown window on a marked
+# workspace, else the first marked workspace.
+printf '40\tcon:40\t-\t-\n21\tcon:21\t-\t-\n' >"$R/shown"
+echo 21 >"$R/shown-last"
+printf '2\n' >"$R/new"
+: >"$t/sway.log"
+ultron attention
+logged sway 'workspace "2:review"'
+logged sway '[con_id=40] focus'
+printf '4\n' >"$R/new"
+ultron attention
+logged sway 'workspace "4:watch"'
 : >"$R/new"
 ultron attention
 logged notify '-a ultron Nothing needs you '

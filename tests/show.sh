@@ -57,8 +57,12 @@ want '^opened on workspace 2 \(id web:[0-9]+\)$' "$(ultron show web 'http://127.
 web=$(<"$t/next")
 logged sway "[con_id=$web] move container to workspace \"2:review\""
 logged sway "[con_id=$web] layout tabbed"
-grep -qF -- "--user-data-dir=$HOME/.local/share/ultron/chromium-preview --password-store=basic --no-first-run --app=http://127.0.0.1:47400/brief/thread-ab?t=1" \
+grep -qF -- "--user-data-dir=$HOME/.local/share/ultron/chromium-preview --profile-directory=UltronPreview --password-store=basic --no-first-run --app=http://127.0.0.1:47400/brief/thread-ab?t=1" \
   "$t/setsid.log" || fail "the preview browser's command line"
+# Its app_id (chrome-<host>__-UltronPreview) is placed on 3 without focus before show moves it.
+for rule in 'assign [app_id="__-UltronPreview$"] workspace $ws3' 'no_focus [app_id="__-UltronPreview$"]'; do
+  grep -qxF -- "$rule" home/sway/.config/sway/config || fail "sway config lacks: $rule"
+done
 want '^opened on workspace 3 ' "$(ultron show web http://localhost:3000/)"
 want '^opened on workspace 4 ' "$(ultron show web http://127.0.0.1:47400/board)"
 want '^opened on workspace 4 ' "$(ultron show web http://localhost:3000/x --ws 4)"

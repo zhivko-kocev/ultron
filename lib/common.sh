@@ -88,6 +88,10 @@ mise_gh() {
   if [[ -n "$token" ]]; then MISE_GITHUB_TOKEN=$token mise "$@"; else mise "$@"; fi
 }
 
+# yay ARGS...: yay without Gradle daemons: an AUR package that builds with Gradle would otherwise leave its
+# daemon running for hours after the build.
+yay() { GRADLE_OPTS="-Dorg.gradle.daemon=false${GRADLE_OPTS:+ $GRADLE_OPTS}" command yay "$@"; }
+
 # pkg_lock: wait for any other package change started by ultron (pkg, update); held until this process exits.
 # pacman runs one change at a time and fails instead of waiting.
 pkg_lock() {

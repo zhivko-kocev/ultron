@@ -1,0 +1,52 @@
+name: Bug
+description: Something in ultron doesn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Check the output below for anything private (user names, hosts, paths) before submitting.
+        A security problem? Use "Report a vulnerability" on the Security tab instead of a public issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Exact commands and messages help most.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: ultron doctor
+      description: Output of `ultron doctor` (add `--deep` if the problem is about the system).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: ultron info
+      description: Output of `ultron info`.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - The test VM (vm/ultron-vm)
+        - A real PC or laptop
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: On real hardware, the machine or its graphics card, if it might matter.
+  - type: input
+    id: version
+    attributes:
+      label: ultron version
+      description: The release or commit (`git -C ~/Projects/ultron log -1 --oneline`).

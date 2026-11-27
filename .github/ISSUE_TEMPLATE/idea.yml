@@ -1,0 +1,40 @@
+name: Idea
+description: Propose a feature or a change of behaviour
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: For a large change, agreeing on the shape here first saves work. See CONTRIBUTING.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What gets in your way today, in your own words.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you would like ultron to do. Mention any setting, key or command it would add or change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways you considered, or how you work around it now.
+  - type: textarea
+    id: info
+    attributes:
+      label: ultron info (optional)
+      description: Output of `ultron info`, when the idea depends on your setup.
+      render: text
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where you run ultron (optional)
+      options:
+        - The test VM (vm/ultron-vm)
+        - A real PC or laptop
+        - Both

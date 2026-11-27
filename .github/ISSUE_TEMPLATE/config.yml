@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/zhivko-kocev/ultron/blob/main/docs/security.md#reporting-a-problem
+    about: How to report something you'd rather not post publicly.
+  - name: Jocasta
+    url: https://github.com/zhivko-kocev/jocasta/issues
+    about: Problems inside Jocasta itself (threads, review pages, the dock) belong in its own repository.

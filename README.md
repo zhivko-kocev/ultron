@@ -1,12 +1,27 @@
 # ultron
 
-A lightweight Arch Linux desktop built for working with coding agents. Install it, sign your agent in, and work: you don't need to know Arch, pacman or sway. If you do, everything is a plain file you can change.
+**An Arch Linux desktop built for working with coding agents: install it, sign your agent in, and work.**
 
-- **Agent-first.** One agent, the boss, lives on workspace 1. Agents show you diffs, web pages, files and running terminals on their own workspaces, and ultron brings you to an agent only when it needs you *and* you've stopped typing. Away from the desk, the question goes to your phone.
-- **Any agent.** [Jocasta](https://github.com/zhivko-kocev/jocasta) is the default boss: it runs many [omp](https://github.com/can1357/oh-my-pi) sessions as threads for your projects. omp, Claude Code, Codex, Gemini CLI and opencode can be the boss instead (one command away), and any other CLI can be added.
-- **Safe enough to let agents work.** Root needs your password in a popup that shows the exact command, every time. Docker is rootless. The disk is encrypted. Every package change has a snapshot you can boot.
+<!-- media -->
+
+## Why
+
+Coding agents now run for minutes or hours, several at once, and each one wants to show you something or ask you something. A normal desktop treats them as one more terminal: their windows land wherever you are, their questions get lost, and every `sudo` is a leap of faith.
+
+ultron gives agents a place on the desktop and rules to follow. They show you diffs, pages and terminals on their own workspaces without pulling you away; when one is truly blocked on you, it waits in a queue and you are taken there only once you stop typing. Root always goes through you. You don't need to know Arch, pacman or sway to use it; if you do, everything is a plain file you can change.
+
+## Features
+
+- **Agent-first workspaces.** The boss agent lives on workspace 1. Agents open review pages, diffs and files on 2, local web pages on 3 and long-running terminals on 4, as tabs. Showing never moves you: the bar marks the workspace (`new 2`) and you look when you want.
+- **Attention queue.** An agent blocked on you raises a request (`ultron attention --raise`). Requests queue oldest first; you are taken to one only after you stop typing, never in focus mode (Super+M), and when you are away the question goes to your phone. Super+A walks the queue.
+- **Jocasta as the boss.** [Jocasta](https://github.com/zhivko-kocev/jocasta) is the default boss: it runs many [omp](https://github.com/can1357/oh-my-pi) sessions as threads, each on its own branch and worktree, with review pages for finished work. omp, Claude Code, Codex, Gemini CLI and opencode can be the boss instead (one command away), and any other CLI can be added.
+- **SwayFX effects.** Rounded corners, shadows and window animations by default, with stock sway as the automatic fallback when an update needs SwayFX rebuilt ([why](docs/adr/0002-swayfx-by-default-with-stock-sway-fallback.md)).
+- **Safe enough to let agents work.** Root needs your password in a popup that shows the exact command, every time. Docker is rootless. The disk is encrypted. Every package change has a snapshot you can boot. [What this protects and what it doesn't](docs/security.md).
+- **Themes, fonts and backgrounds.** Six themes (or your own), any monospaced font and your own background image, switched from the menu (Style). A theme recolours sway, the bar, terminals, the launcher, notifications, the lock screen, GTK apps and Jocasta.
+- **Per-project tools without touching the repo.** A project's tools, environment and tasks can live in `~/.config/mise/config.<repo>.toml`; your shell and Jocasta's threads load it, in every worktree ([how](docs/customize.md#project-tools-without-touching-the-repo)).
+- **Local AI when your hardware can take it.** ollama is set up by itself when a graphics card with about 4 GB of memory or more is found; `ask` uses it from any terminal.
 - **Light.** sway, foot, fuzzel, mako and a bash status bar: about 600 MB of RAM at an idle desktop before any agent starts ([measured](docs/baseline.md)). No daemons you didn't ask for.
-- **Yours.** One menu for everything (Super+Alt+Space), six themes, and a `~/.config/ultron/` folder where your settings, keys, packages and overrides live without forking anything.
+- **Yours.** One menu for everything (Super+Alt+Space), and a `~/.config/ultron/` folder where your settings, keys, packages and overrides live without forking anything.
 
 ## Install
 
@@ -29,9 +44,11 @@ Coming from another Linux install on the same disk? [docs/migrate.md](docs/migra
 
 ## Using it
 
+The first thing to do in a fresh boss window is `/login` (omp's sign-in).
+
 | Key | |
 |---|---|
-| Super+Alt+Space | the menu: install and remove things, setup, themes, update, power |
+| Super+Alt+Space | the menu: install and remove things, setup, style, toggles, capture, update, power |
 | Super+K | every key, searchable |
 | Super+Space / Super+Return | apps / terminal |
 | Super+B | the boss agent |
@@ -65,21 +82,26 @@ Optional extras: `ultron install net` (Tailscale remote access), `ultron install
 
 **Undoing a bad update:** at the boot menu open Snapshots, pick one from before the update and boot it. If it's good, run `sudo limine-snapper-restore` there and reboot.
 
-## Making it yours
+**For agents:** they learn the machine from `ultron guide` (rules) and `ultron info --json` (facts), show things with `ultron show …`, and call you with `ultron attention --raise "…"`. How to add agents and wire their notifications: [docs/agents.md](docs/agents.md).
 
-Settings (`ultron conf`), themes, your own keys and monitor layout, extra packages, per-app overrides, hooks, and your dotfiles repo: [docs/customize.md](docs/customize.md).
+## Customize
 
-## For agents
+Settings (`ultron conf`), themes, fonts, backgrounds, effects, your own keys and monitor layout, extra packages, per-app overrides, hooks, per-project tools and your dotfiles repo: [docs/customize.md](docs/customize.md). You never need to fork ultron for any of it.
 
-Agents learn the machine from `ultron guide` (rules) and `ultron info --json` (facts), show things with `ultron show …`, and call you with `ultron attention --raise "…"`. How to add agents and wire their notifications: [docs/agents.md](docs/agents.md).
+Without a dotfiles repo you get a starter zsh with starship, zoxide, eza, bat, lazygit and lazydocker. The menu also has stay awake, night light, screen recording, and colour and emoji pickers.
 
-## Security
+## Develop
 
-What the encryption, the sudo popup and rootless Docker protect you from, and what they don't: [docs/security.md](docs/security.md). Read it before giving an agent free rein.
+ultron is bash: a `ultron` command, one file per command and per install step, and an installer for the Arch live ISO. Everything is tested in a QEMU VM, never on the machine you work on.
 
-## What's inside
+    vm/ultron-vm create        # download and verify the Arch ISO, make a 40G disk
+    vm/ultron-vm run --iso     # boot the installer, then run the bootstrap line
+    vm/ultron-vm run           # boot the installed system (--nogl if graphics misbehave)
+    bash tests/run             # the self-checks (no root, no desktop)
 
-Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · SwayFX (stock sway as the fallback) · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise (also per project, without a file in the repo) · ollama (on by itself with a graphics card of about 4 GB or more) · Tailscale and ntfy (optional) · a zsh starter with starship, zoxide, eza, bat, lazygit and lazydocker · in the menu: stay awake, night light, screen recording, colour and emoji pickers, font and background switchers.
+How to propose a change, the full dev loop, the rules and how releases work: [CONTRIBUTING.md](CONTRIBUTING.md). Agents working on the repo read [AGENTS.md](AGENTS.md).
+
+Under the hood: Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greetd · SwayFX (stock sway as the fallback) · foot · fuzzel · mako · PipeWire · ufw · rootless Docker · mise · ollama · Tailscale and ntfy (optional).
 
 | Folder | |
 |---|---|
@@ -89,21 +111,23 @@ Arch Linux · LUKS2 + btrfs + snapper · Limine with bootable snapshots · greet
 | `system/` | root-owned files, copied into `/` |
 | `home/`, `templates/`, `themes/`, `skel/` | desktop config, themed templates, themes, starter shell |
 | `agents/` | the agent registry |
+| `tests/` | self-checks |
 | `vm/` | test the whole install in a QEMU VM |
-| `docs/` | keys, customizing, agents, security, firmware, migration, Jocasta; `docs/adr/` records why the big choices were made |
+| `docs/` | the documentation below; `docs/adr/` records why the big choices were made |
 
-## Developing ultron
+## Docs
 
-    vm/ultron-vm create        # download and verify the Arch ISO, make a 40G disk
-    vm/ultron-vm run --iso     # boot the installer, then run the bootstrap line
-    vm/ultron-vm run           # boot the installed system (--nogl if graphics misbehave)
-    vm/ultron-vm type 'ls\n'   # type into the VM; `key ctrl-alt-f2`; `shot f.png` (needs --nogl)
-    vm/ultron-vm ssh [cmd]     # port 2222 (needs sshd and your key in the VM)
+- [customize.md](docs/customize.md): settings, themes, keys, monitors, packages, hooks, dotfiles, per-project tools
+- [keys.md](docs/keys.md): the agent keys
+- [agents.md](docs/agents.md): adding agents, the boss, how agents show things and call you
+- [jocasta.md](docs/jocasta.md): Jocasta on ultron
+- [security.md](docs/security.md): what ultron protects and what it doesn't
+- [bios.md](docs/bios.md): firmware settings before installing
+- [migrate.md](docs/migrate.md): moving a home folder from another install
+- [baseline.md](docs/baseline.md): measured memory and disk use
+- [adr/](docs/adr/): decision records
+- [GLOSSARY.md](GLOSSARY.md) · [CHANGELOG.md](CHANGELOG.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 
-To test an ultron ISO in the VM, put `ULTRON_VM_ISO=/path/to/ultron-<version>-x86_64.iso` in front of `vm/ultron-vm run --iso`. A pushed `v*` tag builds that ISO and publishes it as a release (`.github/workflows/release.yml`); to build one yourself: `docker run --rm --privileged -v "$PWD":/src -w /src archlinux:latest bash iso/build <tag>` (it lands in `out/`).
+## License
 
-Bootstrap from a fork or branch with `ULTRON_REPO=https://github.com/you/ultron ULTRON_REF=mybranch` in front of the bootstrap line. Every question has an `ULTRON_*` variable for unattended runs; they are listed at the top of `bootstrap.sh`.
-
-All scripts pass `shellcheck`. Commits are scanned for secrets by gitleaks: run `git config core.hooksPath .githooks` once after cloning.
-
-`v0.1.0` is the last single-machine version, before ultron became general.
+[MIT](LICENSE).

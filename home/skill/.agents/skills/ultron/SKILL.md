@@ -44,3 +44,4 @@ Showing never moves the user: the window opens as a tab on its workspace, the ba
 ## Jocasta
 
 15. When the boss is Jocasta, the user's notes about its friction are in `~/.local/share/ultron/jocasta-notes.md`.
+16. To show the user a plan, a flow, a map or facts as a page (Jocasta 0.2 on), write a brief spec (the section types and limits are in Jocasta's boss manual: `text`, `facts`, `flow`, `map`, `diff`, `list`) and run `jocasta brief open spec.json` (or pipe it to `jocasta brief open -`). It opens a Jocasta window on workspace 2 without moving the user; a bad spec exits 2 with `jocasta: show: <why>`.

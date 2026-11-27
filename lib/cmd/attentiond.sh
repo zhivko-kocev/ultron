@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # ultron attentiond: the attention daemon (systemd --user). It follows sway: a focused window answers its
 # attention request; reaching a workspace clears its "new" mark, drops requests of closed windows and closes
-# tagged windows whose folder is gone; an agent's visible browser window goes to workspace 3. When the boss is
-# Jocasta it turns Jocasta's notifications into attention requests. Any watcher ending ends the service;
+# tagged windows whose folder is gone; closing a shown window clears the mark of its workspace once no shown
+# window is left there; an agent's visible browser window goes to workspace 3. When the boss is Jocasta it
+# turns Jocasta's notifications into attention requests. Any watcher ending ends the service;
 # systemd restarts it.
 
 # shellcheck source=attention.sh
@@ -34,6 +35,7 @@ _attn_sway() {
       if has("container") then
         if .change == "focus" then "focus\t\(.container.id)"
         elif .change == "new" then "new\t\(.container.id)\t\(.container.pid // 0)\t\(.container.app_id // "")"
+        elif .change == "close" then "close\t\(.container.id)"
         else empty end
       elif .change == "focus" then "ws\t\(.current.name // "")"
       else empty end' |
@@ -42,11 +44,12 @@ _attn_sway() {
     done
 }
 
-# _attn_event focus CON | ws NAME | new CON PID APP_ID
+# _attn_event focus CON | ws NAME | new CON PID APP_ID | close CON
 _attn_event() {
   case $1 in
   focus) attention_seen "$2" ;;
   ws) show_locked _attn_ws_focus "$2" ;;
+  close) show_locked _attn_closed "$2" ;;
   new)
     if [[ "${4:-}" == jocasta-* ]]; then
       show_locked _attn_jocasta_window "$2" "$4"
@@ -68,6 +71,29 @@ _attn_ws_focus() {
     attention_seen "${f##*/}"
   done
   show_sweep "$alive"
+}
+
+# _attn_closed CON: a window closed. When `show` opened it, forget it, and clear the marks of workspaces 2-4 (where
+# shown windows go) that no longer hold a shown window: sway's close event doesn't say where the window was.
+_attn_closed() {
+  local con=$1 tmp tree left="" ws c n
+  [[ "$con" =~ ^[0-9]+$ && -s "$_SHOW_REG" ]] && grep -q "^$con"$'\t' "$_SHOW_REG" || return 0
+  tmp=$(mktemp "$R/.shown.XXXXXX")
+  grep -v "^$con"$'\t' "$_SHOW_REG" >"$tmp" || true
+  mv "$tmp" "$_SHOW_REG"
+  if [[ -s "$R/shown-last" && $(<"$R/shown-last") == "$con" ]]; then rm -f "$R/shown-last"; fi
+  [[ -s "$R/new" ]] || return 0
+  tree=$(swaymsg -t get_tree 2>/dev/null) || return 0
+  local -A reg=()
+  while IFS=$'\t' read -r c _; do reg[$c]=1; done <"$_SHOW_REG"
+  while IFS=$'\t' read -r c ws; do
+    if [[ -n "${reg[$c]-}" ]]; then left+=" ${ws%%:*}"; fi
+  done < <(jq -r '
+    .. | objects | select(.type? == "workspace") | .name as $ws
+    | .. | objects | select(has("app_id") or has("window_properties")) | [.id, $ws] | @tsv' <<<"$tree")
+  for n in 2 3 4; do
+    if [[ "$left " != *" $n "* ]]; then show_unmark "$n"; fi
+  done
 }
 
 # _attn_agent_browser PID: 0 when PID is a browser an agent drives (remote debugging on, not the preview profile).

@@ -207,13 +207,18 @@ _contrast_ok() {
       exit !((a + 0.05) / (b + 0.05) >= 3) }'
 }
 
+# _apply_dim BG: the theme's MUTED, or FG_DIM when MUTED is unreadable on BG (under 3:1, as in Nord).
+_apply_dim() {
+  if _contrast_ok "${_THEME[MUTED]}" "$1"; then echo "${_THEME[MUTED]}"; else echo "${_THEME[FG_DIM]}"; fi
+}
+
 # _apply_palette FONT: the theme's colours and the font for Jocasta (~/.jocasta/agent/palette.json, read when
 # Jocasta starts), written only when Jocasta is set up. Needs theme_load first; FONT is _apply_font's checked name.
-# fg-3 and comment are MUTED, or FG_DIM when MUTED is unreadable on BG_ALT (under 3:1, as in Nord).
+# fg-3 and comment are _apply_dim on BG_ALT.
 _apply_palette() {
-  local dir=$HOME/.jocasta/agent tmp dim=${_THEME[MUTED]}
+  local dir=$HOME/.jocasta/agent tmp dim
   [[ -d "$dir" ]] || return 0
-  _contrast_ok "$dim" "${_THEME[BG_ALT]}" || dim=${_THEME[FG_DIM]}
+  dim=$(_apply_dim "${_THEME[BG_ALT]}")
   tmp=$(mktemp "$dir/.palette.json.XXXXXX")
   printf '{"font": "%s", "colors": {"bg-0": "#%s", "bg-1": "#%s", "bg-2": "#%s", "bg-3": "#%s", "fg": "#%s", "fg-2": "#%s", "fg-3": "#%s", "comment": "#%s", "blue": "#%s", "cyan": "#%s", "yellow": "#%s", "red": "#%s", "green": "#%s", "purple": "#%s", "orange": "#%s"}}\n' \
     "$1" "${_THEME[BG]}" "${_THEME[BG_ALT]}" "${_THEME[BG_ALT]}" "${_THEME[BG_SEL]}" "${_THEME[FG]}" \
@@ -246,7 +251,7 @@ cmd_apply() {
   _render "$t/sway.conf.tmpl" "$ULTRON_GEN/sway.conf" "KEYBOARD_BLOCK=$block" "FONT=$font" "BG_LINE=$bg"
   _render "$t/foot.ini.tmpl" "$ULTRON_GEN/foot.ini" "FONT=$font"
   _render "$t/fuzzel.ini.tmpl" "$ULTRON_GEN/fuzzel.ini" "FONT=$font"
-  _render "$t/colors.tmpl" "$ULTRON_GEN/colors"
+  _render "$t/colors.tmpl" "$ULTRON_GEN/colors" "BAR_MUTED=$(_apply_dim "${_THEME[BG]}")"
   _apply_swayidle
   _apply_effects
   _apply_palette "$font"

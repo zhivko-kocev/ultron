@@ -138,4 +138,15 @@ bash -c 'source lib/common.sh; source lib/cmd/attentiond.sh; _attn_event focus 2
 [[ ! -e "$R/attention/21" ]] || fail "attentiond kept the focused window's request"
 [[ ! -e "$R/attention/99" ]] || fail "attentiond kept a closed window's request"
 [[ $(<"$R/new") == 3 ]] || fail "attentiond didn't clear workspace 2's mark"
+# attentiond: closing a shown window forgets it and clears its workspace's mark once no shown window is left
+# there (window 77 was on 3 and is gone from the tree; 40 is still on 2); other windows' closes change nothing.
+printf '40\tcon:40\t-\t-\n77\tweb:77\t-\t-\n' >"$R/shown"
+echo 77 >"$R/shown-last"
+printf '2\n3\n5\n' >"$R/new"
+bash -c 'source lib/common.sh; source lib/cmd/attentiond.sh; _attn_event close 21; _attn_event close 77'
+[[ $(<"$R/shown") == $'40\tcon:40\t-\t-' ]] || fail "attentiond kept a closed window in the registry"
+[[ ! -e "$R/shown-last" ]] || fail "attentiond kept a closed window as the newest shown"
+[[ $(<"$R/new") == $'2\n5' ]] || fail "closing workspace 3's only shown window: marks are $(<"$R/new")"
+bash -c 'source lib/common.sh; source lib/cmd/attentiond.sh; _attn_event close 40'
+[[ $(<"$R/new") == 5 ]] || fail "closing workspace 2's only shown window: marks are $(<"$R/new")"
 echo "attention ok"

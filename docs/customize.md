@@ -44,7 +44,7 @@ After editing a file by hand, run `ultron apply` (or press Super+Shift+C for swa
 
 ## Themes
 
-`ultron theme` picks one; `ultron theme --list` shows them. It recolours sway, the bar, terminals (new ones), the launcher, notifications, the lock screen and GTK apps.
+`ultron theme` picks one; `ultron theme --list` shows them. It recolours sway, the bar, terminals (new ones), the launcher, notifications, the lock screen and GTK apps. The bar's dim text uses the theme's `MUTED` colour, or `FG_DIM` when `MUTED` has less than 3:1 contrast against `BG` (as in Nord).
 
 Your own theme: copy one from the ultron folder's `themes/` to `~/.config/ultron/themes/mine.conf`, change the colours (hex without `#`), then `ultron theme mine`.
 

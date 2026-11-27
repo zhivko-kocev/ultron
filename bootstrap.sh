@@ -559,7 +559,9 @@ ExecStart=
 ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin $USER_NAME %I \$TERM
 EOF
   cat >/mnt/etc/sudoers.d/ultron-firstboot <<EOF
-# Written by ultron's bootstrap.sh: lets a finished \`ultron install\` remove the first-boot files (and this one).
+# Written by ultron's bootstrap.sh: lets a finished \`ultron install\` remove the first-boot files (and this one),
+# and the first boot's password question waits for the user instead of timing out after 5 minutes.
+Defaults:$USER_NAME passwd_timeout=0
 $USER_NAME ALL=(root) NOPASSWD: /usr/bin/rm -f /var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf /etc/profile.d/ultron-firstboot.sh /etc/sudoers.d/ultron-firstboot
 EOF
   chmod 0440 /mnt/etc/sudoers.d/ultron-firstboot

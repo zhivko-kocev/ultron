@@ -5,3 +5,9 @@ oh-my-pi = "latest"
 hunk = "latest"
 node = "lts"
 "github:zhivko-kocev/jocasta" = "latest"
+
+# Jocasta's releases are read from GitHub itself (mise's versions host has no list for it) and arrive on release
+# day (it is ultron's own boss, built with attestations; other tools keep mise's release-age delay).
+[settings]
+versions_host_exclude = ["github:zhivko-kocev/jocasta"]
+minimum_release_age_excludes = ["github:zhivko-kocev/jocasta"]

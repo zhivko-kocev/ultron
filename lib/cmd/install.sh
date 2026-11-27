@@ -110,9 +110,19 @@ run_steps() {
   done
 }
 
+# _install_first_boot_done: after a finished default install, remove the first-boot autologin and
+# install-on-login (bootstrap.sh's sudoers file allows exactly this rm without a password).
+_install_first_boot_done() {
+  [[ -e /var/lib/ultron/firstboot ]] || return 0
+  say "Removing the first-boot autologin"
+  sudo -n /usr/bin/rm -f /var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf \
+    /etc/profile.d/ultron-firstboot.sh /etc/sudoers.d/ultron-firstboot ||
+    warn "Couldn't remove the first-boot files: run sudo rm -f /var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf /etc/profile.d/ultron-firstboot.sh"
+}
+
 # _install_first_boot: `ultron install --first-boot`, started by the first login on tty1 (bootstrap.sh arms
 # it): the default steps, then a reboot into the desktop. A failure names the step and returns to the shell;
-# the first-boot files stay until the desktop step removes them, so until then each login on tty1 retries.
+# the first-boot files stay until a default install finishes, so until then each login on tty1 retries.
 _install_first_boot() {
   local step_file step
   # The autologin is quicker than NetworkManager joining the Wi-Fi network bootstrap.sh carried over.
@@ -170,6 +180,7 @@ cmd_install() {
   done
   if ((!$#)); then
     "$ULTRON_ROOT/bin/ultron" doctor || die "doctor found problems (the FAIL lines above); fix them and rerun: ultron doctor"
+    _install_first_boot_done
   fi
   run_hook post-install
   # Under --first-boot (ULTRON_STEP_FILE set) the parent reboots by itself.

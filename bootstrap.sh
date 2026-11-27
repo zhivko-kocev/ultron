@@ -546,7 +546,8 @@ carry_wifi() {
 }
 
 # arm_first_boot: the first boot logs the user in on tty1 and runs `ultron install --first-boot`.
-# The install's desktop step removes all three files once its root work is done.
+# A successful default `ultron install` removes these files with the one password-free command the sudoers
+# file below allows (the install drops its sudo ticket before the last steps, so it can't ask again).
 arm_first_boot() {
   say "Arming the first boot: after the disk password the install continues by itself"
   install -d /mnt/var/lib/ultron /mnt/etc/systemd/system/getty@tty1.service.d
@@ -557,9 +558,15 @@ arm_first_boot() {
 ExecStart=
 ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin $USER_NAME %I \$TERM
 EOF
+  cat >/mnt/etc/sudoers.d/ultron-firstboot <<EOF
+# Written by ultron's bootstrap.sh: lets a finished \`ultron install\` remove the first-boot files (and this one).
+$USER_NAME ALL=(root) NOPASSWD: /usr/bin/rm -f /var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf /etc/profile.d/ultron-firstboot.sh /etc/sudoers.d/ultron-firstboot
+EOF
+  chmod 0440 /mnt/etc/sudoers.d/ultron-firstboot
+  visudo -cqf /mnt/etc/sudoers.d/ultron-firstboot || die "the first-boot sudoers file is invalid"
   cat >/mnt/etc/profile.d/ultron-firstboot.sh <<'EOF'
 # Written by ultron's bootstrap.sh: on the first boot, continue the install right after the login on tty1.
-# Removed by `ultron install` once its root work is done; until then every login on tty1 tries again.
+# Removed when `ultron install` finishes; until then every login on tty1 tries again.
 if [ -e /var/lib/ultron/firstboot ] && [ "$(tty)" = /dev/tty1 ] && [ "$(id -u)" -ne 0 ] &&
   [ -x "$HOME/Projects/ultron/bin/ultron" ]; then
   "$HOME/Projects/ultron/bin/ultron" install --first-boot

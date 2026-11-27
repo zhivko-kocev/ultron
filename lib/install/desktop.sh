@@ -133,22 +133,6 @@ _desktop_effects() {
   fi
 }
 
-# _desktop_first_boot_done: remove the first-boot autologin and install-on-login that bootstrap.sh armed.
-# The last root action of this step (the last root step of a default install): the install's root work is
-# done, so tty1 goes back to a normal login.
-_desktop_first_boot_done() {
-  local files=(/var/lib/ultron/firstboot /etc/systemd/system/getty@tty1.service.d/ultron-firstboot.conf
-    /etc/profile.d/ultron-firstboot.sh) f
-  for f in "${files[@]}"; do
-    if [[ -e "$f" ]]; then
-      say "Removing the first-boot autologin"
-      sudo rm -f "${files[@]}"
-      sudo systemctl daemon-reload
-      return 0
-    fi
-  done
-}
-
 step_desktop() {
   local home=$ULTRON_ROOT/home pkgs=() d
   _desktop_dirs
@@ -174,5 +158,4 @@ step_desktop() {
   mkdir -p "$HOME/Pictures/Screenshots"
   _desktop_mime
   _desktop_shell
-  _desktop_first_boot_done # keep last: see its comment
 }

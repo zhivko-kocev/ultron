@@ -1,11 +1,13 @@
 # shellcheck shell=bash
-# ultron notify [--phone] [--urgent] TITLE BODY: desktop notice; also a phone push with --phone or while away.
+# ultron notify [--phone | --phone-only] [--urgent] TITLE BODY: desktop notice; also a phone push with --phone
+# or while away. --phone-only: the phone push alone (no desktop notice), when phone alerts are set up.
 
 cmd_notify() {
-  local phone=0 urgent=0
+  local phone=0 desktop=1 urgent=0
   while (($#)); do
     case $1 in
     --phone) phone=1 ;;
+    --phone-only) phone=1 desktop=0 ;;
     --urgent) urgent=1 ;;
     --) shift; break ;;
     -*) die "notify: unknown option '$1'" ;;
@@ -14,11 +16,13 @@ cmd_notify() {
     shift
   done
   local title=${1:-} body=${2:-}
-  [[ -n "$title" ]] || die "usage: ultron notify [--phone] [--urgent] TITLE BODY"
+  [[ -n "$title" ]] || die "usage: ultron notify [--phone | --phone-only] [--urgent] TITLE BODY"
 
-  local args=(-a ultron)
-  ((urgent)) && args+=(-u critical)
-  notify-send "${args[@]}" "$title" "$body" 2>/dev/null || true
+  if ((desktop)); then
+    local args=(-a ultron)
+    ((urgent)) && args+=(-u critical)
+    notify-send "${args[@]}" "$title" "$body" 2>/dev/null || true
+  fi
 
   if ((phone)) || is_away; then
     ntfy_load || return 0

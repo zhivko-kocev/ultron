@@ -94,7 +94,9 @@ _attn_jocasta_window() {
   show_mark "$n" "$1"
 }
 
-# Jocasta writes one JSON line per notification: reason is blocked, done, failed or event.
+# Jocasta writes one JSON line per notification: reason is blocked, done, failed, event or phase. A phase line
+# (Jocasta 0.2 on) is a thread changing phase, its title one line like "acme-api/refunds: review · $1.84": it goes
+# to the phone only, so the phone holds a running summary of the threads.
 _attn_jocasta_log() {
   local line reason title result f
   tail -n0 -F "$1" 2>/dev/null | while IFS= read -r line; do
@@ -105,6 +107,7 @@ _attn_jocasta_log() {
     case $reason in
     blocked) attention_raise "$title" ;;
     done | failed) attention_done "Thread $reason: $title" ;;
+    phase) detach "$ULTRON_ROOT/bin/ultron" notify --phone-only "$title" "" ;;
     esac
   done
 }

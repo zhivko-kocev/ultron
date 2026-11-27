@@ -27,7 +27,7 @@ The first thing to do in a fresh boss pane is `/login` (omp's sign-in).
 
 ## Questions, notifications and the bar
 
-- Jocasta writes one JSON line per notification to `~/.local/share/jocasta/data/notifications.jsonl`, questions and Allow requests included. `ultron-attentiond` follows that file: `blocked` becomes a request in the attention queue for the boss window (you are taken there once you stop typing, it gets the urgent mark in focus mode, or it goes to your phone when you are away); `done` and `failed` go to your phone only when you are away.
+- Jocasta writes one JSON line per notification to `~/.local/share/jocasta/data/notifications.jsonl`, questions and Allow requests included. `ultron-attentiond` follows that file: `blocked` becomes a request in the attention queue for the boss window (you are taken there once you stop typing, it gets the urgent mark in focus mode, or it goes to your phone when you are away); `done` and `failed` go to your phone only when you are away; `phase` (Jocasta 0.2 on: a thread changed phase, one line like `acme-api/refunds: review · $1.84`) goes to your phone whenever phone alerts are set up (`ultron install ntfy`), so the phone keeps a running summary of your threads.
 - The bar's `J` block reads `jocasta status --json` every third tick (about every 6 s): grey `J` when running (`J 2 running` while threads work), red `J ✗` when Jocasta doesn't answer, red `J ● 2 need you` while requests or threads wait.
 - mako styles Jocasta's notifications (`app-name=Jocasta`, blue border).
 

@@ -43,7 +43,7 @@ Agents
   info [--json]       facts about this machine, for agents
   show review|watch|web|file|code|list|close   show something on workspace 2 / 3 / 4 (never moves the user)
   attention [--raise TITLE|--done TITLE|--list]  tell the user an agent needs them / has finished
-  notify [--phone] [--urgent] TITLE BODY
+  notify [--phone|--phone-only] [--urgent] TITLE BODY
   boss [--start]      start or show the boss window
   task                new thread (when the boss is Jocasta)
 

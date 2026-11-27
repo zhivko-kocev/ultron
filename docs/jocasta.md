@@ -23,7 +23,7 @@ The first thing to do in a fresh boss pane is `/login` (omp's sign-in).
 
 ## Palette
 
-`ultron apply` (and so every `ultron theme`) writes the theme's colours to `~/.jocasta/agent/palette.json` when `~/.jocasta/agent` exists: `colors` (`bg-0`…`bg-3`, `fg`, `fg-2`, `fg-3`, `comment`, `blue`, `cyan`, `yellow`, `red`, `green`, `purple`, `orange`). Jocasta reads it when it starts: restart it after changing the theme. omp's own panes keep omp's theme (omp has no theme that follows the terminal's colours in both modes).
+`ultron apply` (and so every `ultron theme`, font change or `ultron install jocasta`) writes `~/.jocasta/agent/palette.json` when `~/.jocasta/agent` exists: `font` (the `FONT` setting) and `colors` (`bg-0`…`bg-3`, `fg`, `fg-2`, `fg-3`, `comment`, `blue`, `cyan`, `yellow`, `red`, `green`, `purple`, `orange`). Jocasta's dock and its windows use them; it reads the file when it starts, so restart it after a change. omp's own panes keep omp's theme (omp has no theme that follows the terminal's colours in both modes).
 
 ## Questions, notifications and the bar
 
@@ -33,7 +33,7 @@ The first thing to do in a fresh boss pane is `/login` (omp's sign-in).
 
 ## Pages
 
-Jocasta opens its pages with `xdg-open http://127.0.0.1:<port>/…`. ultron's link router opens local pages in the preview Chromium without moving you: review pages (`/brief/thread-…`, `/brief/pr-…`) on workspace 2, the board (`/board`) on 4, other local pages on 3. Other links go to your browser on 9.
+From Jocasta 0.2 its pages are its own windows (`jocasta view <id>`): sway puts review, `show` and morning-brief windows (app ids `jocasta-review`, `jocasta-show`, `jocasta-brief`) on workspace 2 and the board (`jocasta-board`) on 4, without taking focus; the bar marks the workspace and Super+A reaches them like any shown window. Jocasta 0.1 opened its pages as local web pages, which ultron's link router still sends to the preview Chromium on the same workspaces. Other links go to your browser on 9.
 
 ## Keys
 

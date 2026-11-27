@@ -35,7 +35,9 @@ step_jocasta() {
     ok "Wrote $projects (Jocasta finds the git repositories in those folders)"
   fi
 
+  local font
   theme_load
   _apply_check_theme
-  _apply_palette
+  _apply_font font
+  _apply_palette "$font"
 }

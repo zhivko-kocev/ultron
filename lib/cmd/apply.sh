@@ -196,14 +196,14 @@ _apply_effects() {
   } | _apply_write "$ULTRON_GEN/effects.conf"
 }
 
-# _apply_palette: the theme's colours for Jocasta (~/.jocasta/agent/palette.json, read when Jocasta starts),
-# written only when Jocasta is set up. Needs theme_load first.
+# _apply_palette FONT: the theme's colours and the font for Jocasta (~/.jocasta/agent/palette.json, read when
+# Jocasta starts), written only when Jocasta is set up. Needs theme_load first; FONT is _apply_font's checked name.
 _apply_palette() {
   local dir=$HOME/.jocasta/agent tmp
   [[ -d "$dir" ]] || return 0
   tmp=$(mktemp "$dir/.palette.json.XXXXXX")
-  printf '{"colors": {"bg-0": "#%s", "bg-1": "#%s", "bg-2": "#%s", "bg-3": "#%s", "fg": "#%s", "fg-2": "#%s", "fg-3": "#%s", "comment": "#%s", "blue": "#%s", "cyan": "#%s", "yellow": "#%s", "red": "#%s", "green": "#%s", "purple": "#%s", "orange": "#%s"}}\n' \
-    "${_THEME[BG]}" "${_THEME[BG_ALT]}" "${_THEME[BG_ALT]}" "${_THEME[BG_SEL]}" "${_THEME[FG]}" \
+  printf '{"font": "%s", "colors": {"bg-0": "#%s", "bg-1": "#%s", "bg-2": "#%s", "bg-3": "#%s", "fg": "#%s", "fg-2": "#%s", "fg-3": "#%s", "comment": "#%s", "blue": "#%s", "cyan": "#%s", "yellow": "#%s", "red": "#%s", "green": "#%s", "purple": "#%s", "orange": "#%s"}}\n' \
+    "$1" "${_THEME[BG]}" "${_THEME[BG_ALT]}" "${_THEME[BG_ALT]}" "${_THEME[BG_SEL]}" "${_THEME[FG]}" \
     "${_THEME[FG_DIM]}" "${_THEME[MUTED]}" "${_THEME[MUTED]}" "${_THEME[C12]}" "${_THEME[C14]}" "${_THEME[C11]}" \
     "${_THEME[C9]}" "${_THEME[C10]}" "${_THEME[C13]}" "${_THEME[ACCENT_ALT]}" >"$tmp"
   mv -fT "$tmp" "$dir/palette.json"
@@ -236,7 +236,7 @@ cmd_apply() {
   _render "$t/colors.tmpl" "$ULTRON_GEN/colors"
   _apply_swayidle
   _apply_effects
-  _apply_palette
+  _apply_palette "$font"
   _render "$t/mako.tmpl" "$HOME/.config/mako/config" "FONT=$font"
   _render --append "$d/swaylock" "$t/swaylock.tmpl" "$HOME/.config/swaylock/config"
   _render --append "$d/gtk.ini" "$t/gtk.tmpl" "$HOME/.config/gtk-3.0/settings.ini" "DARK=$dark"

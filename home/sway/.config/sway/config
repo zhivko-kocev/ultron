@@ -43,6 +43,10 @@ assign [app_id="^ultron-sys"] workspace $ws10
 # The preview browser of `ultron show web` (its --profile-directory=UltronPreview); your web apps are -Default.
 assign [app_id="__-UltronPreview$"] workspace $ws3
 no_focus [app_id="__-UltronPreview$"]
+# Jocasta's own windows (0.2 on): review, show and morning-brief pages on 2, the board on 4.
+assign [app_id="^jocasta-(review|show|brief)$"] workspace $ws2
+assign [app_id="^jocasta-board$"] workspace $ws4
+no_focus [app_id="^jocasta-"]
 for_window [app_id="^(org\.pulseaudio\.pavucontrol|swappy|imv|ultron-float)$"] floating enable
 # Workspaces 2-4 (what agents show you) are tabs. Runs after the window is placed, so assigned windows match.
 for_window [workspace="^(2:review|3:web|4:watch)$"] layout tabbed

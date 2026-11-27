@@ -33,21 +33,27 @@ _attn_sway() {
     jq -r --unbuffered '
       if has("container") then
         if .change == "focus" then "focus\t\(.container.id)"
-        elif .change == "new" then "new\t\(.container.id)\t\(.container.pid // 0)"
+        elif .change == "new" then "new\t\(.container.id)\t\(.container.pid // 0)\t\(.container.app_id // "")"
         else empty end
       elif .change == "focus" then "ws\t\(.current.name // "")"
       else empty end' |
-    while IFS=$'\t' read -r kind a b; do
-      _attn_event "$kind" "$a" "${b:-}" || true
+    while IFS=$'\t' read -r kind a b c; do
+      _attn_event "$kind" "$a" "${b:-}" "${c:-}" || true
     done
 }
 
-# _attn_event focus CON | ws NAME | new CON PID
+# _attn_event focus CON | ws NAME | new CON PID APP_ID
 _attn_event() {
   case $1 in
   focus) attention_seen "$2" ;;
   ws) show_locked _attn_ws_focus "$2" ;;
-  new) if _attn_agent_browser "$3"; then show_locked _attn_agent_window "$2"; fi ;;
+  new)
+    if [[ "${4:-}" == jocasta-* ]]; then
+      show_locked _attn_jocasta_window "$2" "$4"
+    elif _attn_agent_browser "$3"; then
+      show_locked _attn_agent_window "$2"
+    fi
+    ;;
   esac
 }
 
@@ -77,6 +83,15 @@ _attn_agent_window() {
   _show_move "$1" 3 || return 0
   show_reg_add "$1" "agent-web:$1" - -
   show_mark 3 "$1"
+}
+
+# _attn_jocasta_window CON APP_ID: one of Jocasta's windows (sway's assign rules placed it on 2 or 4): it is a
+# shown window like the ones `show` opens, so the bar marks its workspace and Super+A can reach it.
+_attn_jocasta_window() {
+  local n=2
+  if [[ "$2" == jocasta-board ]]; then n=4; fi
+  show_reg_add "$1" "jocasta:$1" - -
+  show_mark "$n" "$1"
 }
 
 # Jocasta writes one JSON line per notification: reason is blocked, done, failed or event.

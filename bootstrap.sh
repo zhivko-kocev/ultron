@@ -293,8 +293,9 @@ keeps() {
 }
 
 # parts_summary DISK: its partitions as "fstype "label" size, ..." so people recognise their disks.
+# NAME must be among the columns: without it lsblk prints a flat list instead of the disk with its children.
 parts_summary() {
-  lsblk -J -o TYPE,FSTYPE,LABEL,SIZE "$1" 2>/dev/null | jq -r '
+  lsblk -J -o NAME,TYPE,FSTYPE,LABEL,SIZE "$1" 2>/dev/null | jq -r '
     [.blockdevices[0].children[]? |
       (.fstype // "unformatted") + (if .label then " \"" + .label + "\"" else "" end) + " " + .size] |
     if length == 0 then "no partitions" else join(", ") end' || echo "partitions unknown"
@@ -568,10 +569,15 @@ EOF
   visudo -cqf /mnt/etc/sudoers.d/ultron-firstboot || die "the first-boot sudoers file is invalid"
   cat >/mnt/etc/profile.d/ultron-firstboot.sh <<'EOF'
 # Written by ultron's bootstrap.sh: on the first boot, continue the install right after the login on tty1.
-# Removed when `ultron install` finishes; until then every login on tty1 tries again.
+# Removed when `ultron install` finishes; until then every login on tty1 tries again. A failure waits for Enter
+# (on a terminal): when this runs inside the greetd session, the desktop would start over the message.
 if [ -e /var/lib/ultron/firstboot ] && [ "$(tty)" = /dev/tty1 ] && [ "$(id -u)" -ne 0 ] &&
   [ -x "$HOME/Projects/ultron/bin/ultron" ]; then
-  "$HOME/Projects/ultron/bin/ultron" install --first-boot
+  if ! "$HOME/Projects/ultron/bin/ultron" install --first-boot && [ -t 0 ]; then
+    printf 'Press Enter to continue to the desktop (the install retries at the next login) '
+    read -r _ultron_enter || :
+    unset _ultron_enter
+  fi
 fi
 EOF
 }

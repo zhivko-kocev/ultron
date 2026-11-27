@@ -7,7 +7,7 @@ What changed for people using ultron, newest first. Each version is a `v*` tag; 
 **Install like a product**
 - Each release ships an installer ISO (`ultron-<version>-x86_64.iso` with its `.sha256`): boot it and the installer starts by itself. The `curl` line on a stock Arch ISO still works.
 - The installer lists Wi-Fi networks and joins the one you pick; the network is carried into the installed system.
-- After the first reboot the install continues by itself (it asks for your password once), runs `ultron doctor`, and reboots into the desktop. A failed step says what to fix and how to retry (`ultron install --first-boot`).
+- After the first reboot the install continues by itself (it asks for your password once), runs `ultron doctor`, and reboots into the desktop. A failed step says what to fix and how to retry (`ultron install --first-boot`), and waits for Enter so the desktop doesn't start over the message.
 
 **Agents and attention**
 - Jocasta is the default boss. mise installs it from its releases, with checksums and build attestations checked; nothing is built on the PC. omp follows its latest release instead of a pinned version.
@@ -17,7 +17,7 @@ What changed for people using ultron, newest first. Each version is a `v*` tag; 
 - Agents' visible browser tabs land on workspace 3; your own browser moved to workspace 9 (`9:browse`).
 - Focus mode (Super+M) also holds notifications.
 - Two agents asking for `sudo` at once get two popups, one after the other.
-- Jocasta's colours follow the ultron theme (`~/.jocasta/agent/palette.json`), and its questions and Allow requests reach the attention queue and your phone.
+- Jocasta's colours follow the ultron theme (`~/.jocasta/agent/palette.json`; dim text falls back to a brighter colour where the theme's muted one is unreadable), and its questions and Allow requests reach the attention queue and your phone.
 
 **Desktop**
 - Effects: SwayFX (rounded corners, shadows, window animations) is on by default (`EFFECTS`), with stock sway as the automatic fallback when an update needs SwayFX rebuilt.

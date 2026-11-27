@@ -42,11 +42,34 @@ _pick_emoji() {
   wtype -- "$e" 2>/dev/null || true
 }
 
+# _pick_ppm_pixel FILE X Y: the RGB bytes at pixel X,Y of grim's binary PPM (header "P6\nW H\n255\n") as #rrggbb.
+_pick_ppm_pixel() {
+  local magic w h hlen
+  { read -r magic && read -r w h; } <"$1" || return 1
+  [[ "$magic" == P6 && "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-9]+$ ]] && (($2 < w && $3 < h)) || return 1
+  hlen=$(head -n 3 -- "$1" | wc -c)
+  od -An -tx1 -j $((hlen + ($3 * w + $2) * 3)) -N 3 -- "$1" | _pick_hex
+}
+
+# The whole output under the point is captured at its own scale: grim's image is then the output's pixels 1:1.
+# A 1x1 region (or another scale) makes grim resample, and at a fractional scale the region starts between two
+# physical pixels, so its bilinear filter mixes in the neighbours (#fabd2f came out #f9be34 at 1.25).
 _pick_color() {
-  local point hex
-  point=$(slurp -p) || return 0
-  hex=$(grim -g "$point" -t ppm - | tail -c 3 | od -An -tx1 | _pick_hex) ||
-    die "couldn't read the colour under the pointer"
+  local point x y out name="" scale ox oy="" px py tmp hex=""
+  point=$(slurp -p) || return 0 # "X,Y 1x1" in layout coordinates
+  [[ "$point" =~ ^(-?[0-9]+),(-?[0-9]+) ]] || die "slurp gave an unexpected point: $point"
+  x=${BASH_REMATCH[1]} y=${BASH_REMATCH[2]}
+  out=$(swaymsg -t get_outputs | jq -r --argjson x "$x" --argjson y "$y" 'first(.[] | select(.active and
+    .rect.x <= $x and $x < .rect.x + .rect.width and .rect.y <= $y and $y < .rect.y + .rect.height) |
+    "\(.name) \(.scale) \(.rect.x) \(.rect.y)")') || true
+  read -r name scale ox oy <<<"$out"
+  [[ -n "$oy" ]] || die "no output holds the point $x,$y"
+  read -r px py < <(awk -v x=$((x - ox)) -v y=$((y - oy)) -v s="$scale" \
+    'BEGIN { printf "%d %d\n", x * s + 1e-6, y * s + 1e-6 }')
+  tmp=$(mktemp "${TMPDIR:-/tmp}/ultron-pick.XXXXXX")
+  if grim -o "$name" -s "$scale" -t ppm "$tmp"; then hex=$(_pick_ppm_pixel "$tmp" "$px" "$py") || hex=""; fi
+  rm -f "$tmp"
+  [[ -n "$hex" ]] || die "couldn't read the colour under the pointer"
   printf '%s' "$hex" | wl-copy
   desktop_notify "Colour $hex" "Copied"
 }

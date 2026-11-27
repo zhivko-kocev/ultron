@@ -208,8 +208,9 @@ _show_web() {
   before=" $(sway_ids true | tr '\n' ' ') "
   mkdir -p "$PREVIEW_PROFILE"
   # basic: the preview profile never touches the keyring the everyday browser uses. The profile directory gives
-  # its windows the Wayland app_id chrome-<host>__-UltronPreview (Chromium ignores --class there): sway's assign
-  # and no_focus rules put them on workspace 3 unfocused, so nothing flashes where the user is.
+  # its windows the Wayland app_id chrome-<host>__-UltronPreview, or chrome-<path>-UltronPreview for a file://
+  # page (Chromium ignores --class there): sway's assign and no_focus rules match -UltronPreview$ and put them on
+  # workspace 3 unfocused, so nothing flashes where the user is.
   detach chromium --user-data-dir="$PREVIEW_PROFILE" --profile-directory=UltronPreview --password-store=basic \
     --no-first-run --app="$url" 8>&-
   # A running preview browser opens the window itself; either way it belongs to the profile's first process.
@@ -248,7 +249,11 @@ _show_file() {
   path=$(realpath -- "$path")
 
   local mime viewer=()
-  mime=$(file --mime-type -b -- "$path")
+  # By extension first: `file` calls a short HTML file text/plain.
+  case ${path,,} in
+  *.html | *.htm) mime=text/html ;;
+  *) mime=$(file --mime-type -b -- "$path") ;;
+  esac
   case $mime in
   text/html)
     _show_web "file://$path" --tag "$tag"

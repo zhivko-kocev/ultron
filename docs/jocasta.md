@@ -23,7 +23,7 @@ The first thing to do in a fresh boss pane is `/login` (omp's sign-in).
 
 ## Palette
 
-`ultron apply` (and so every `ultron theme`, font change or `ultron install jocasta`) writes `~/.jocasta/agent/palette.json` when `~/.jocasta/agent` exists: `font` (the `FONT` setting) and `colors` (`bg-0`…`bg-3`, `fg`, `fg-2`, `fg-3`, `comment`, `blue`, `cyan`, `yellow`, `red`, `green`, `purple`, `orange`). Jocasta's dock and its windows use them; it reads the file when it starts, so restart it after a change. omp's own panes keep omp's theme (omp has no theme that follows the terminal's colours in both modes).
+`ultron apply` (and so every `ultron theme`, font change or `ultron install jocasta`) writes `~/.jocasta/agent/palette.json` when `~/.jocasta/agent` exists: `font` (the `FONT` setting) and `colors` (`bg-0`…`bg-3`, `fg`, `fg-2`, `fg-3`, `comment`, `blue`, `cyan`, `yellow`, `red`, `green`, `purple`, `orange`). `fg-3` and `comment` are the theme's `MUTED` colour, or its `FG_DIM` when `MUTED` has less than 3:1 contrast against `BG_ALT` (as in Nord), so dim text stays readable. Jocasta's dock and its windows use them; it reads the file when it starts, so restart it after a change. omp's own panes keep omp's theme (omp has no theme that follows the terminal's colours in both modes).
 
 ## Questions, notifications and the bar
 

@@ -59,17 +59,24 @@ logged sway "[con_id=$web] move container to workspace \"2:review\""
 logged sway "[con_id=$web] layout tabbed"
 grep -qF -- "--user-data-dir=$HOME/.local/share/ultron/chromium-preview --profile-directory=UltronPreview --password-store=basic --no-first-run --app=http://127.0.0.1:47400/brief/thread-ab?t=1" \
   "$t/setsid.log" || fail "the preview browser's command line"
-# Its app_id (chrome-<host>__-UltronPreview) is placed on 3 without focus before show moves it.
-for rule in 'assign [app_id="__-UltronPreview$"] workspace $ws3' 'no_focus [app_id="__-UltronPreview$"]'; do
+# Its app_id (chrome-<host>__-UltronPreview, chrome-<path>-UltronPreview for file://) is placed on 3 without focus
+# before show moves it; web apps (…-Default) are left alone.
+for rule in 'assign [app_id="-UltronPreview$"] workspace $ws3' 'no_focus [app_id="-UltronPreview$"]'; do
   grep -qxF -- "$rule" home/sway/.config/sway/config || fail "sway config lacks: $rule"
 done
+for a in chrome-127.0.0.1__-UltronPreview chrome-__tmp_y.html-UltronPreview; do
+  [[ $a =~ -UltronPreview$ ]] || fail "the preview rule misses $a"
+done
+a=chrome-app.example.com__-Default
+if [[ $a =~ -UltronPreview$ ]]; then fail "the preview rule takes a web app"; fi
 want '^opened on workspace 3 ' "$(ultron show web http://localhost:3000/)"
 want '^opened on workspace 4 ' "$(ultron show web http://127.0.0.1:47400/board)"
 want '^opened on workspace 4 ' "$(ultron show web http://localhost:3000/x --ws 4)"
 printf '\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\1\0\0\0\1\x08\x06\0\0\0\x1f\x15\xc4\x89' >"$t/a.png"
 want '^opened on workspace 2 \(id con:[0-9]+\)$' "$(ultron show file "$t/a.png" --tag t1)"
 logged sway "[con_id=$(<"$t/next")] move container to workspace \"2:review\""
-printf '<!doctype html><html><body>hi</body></html>\n' >"$t/a.html"
+# A short HTML file (`file` calls it text/plain) still opens as a web page: decided by its extension.
+printf '<p>hi</p>\n' >"$t/a.html"
 want '^opened on workspace 3 \(id web:' "$(ultron show file "$t/a.html")"
 grep -qF -- "--app=file://$t/a.html" "$t/setsid.log" || fail "an HTML file didn't open as a web page"
 want '^opened on workspace 5' "$(ultron show code "$t/a.html:12:3")"

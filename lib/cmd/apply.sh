@@ -196,15 +196,28 @@ _apply_effects() {
   } | _apply_write "$ULTRON_GEN/effects.conf"
 }
 
+# _contrast_ok FG BG: whether two hex colours (no #) have a WCAG contrast ratio of at least 3:1.
+_contrast_ok() {
+  local c v=()
+  for c in "$1" "$2"; do v+=($((16#${c:0:2})) $((16#${c:2:2})) $((16#${c:4:2}))); done
+  awk -v s="${v[*]}" 'function lin(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ^ 2.4 }
+    function lum(r, g, b) { return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) }
+    BEGIN { split(s, v, " "); a = lum(v[1], v[2], v[3]); b = lum(v[4], v[5], v[6])
+      if (a < b) { t = a; a = b; b = t }
+      exit !((a + 0.05) / (b + 0.05) >= 3) }'
+}
+
 # _apply_palette FONT: the theme's colours and the font for Jocasta (~/.jocasta/agent/palette.json, read when
 # Jocasta starts), written only when Jocasta is set up. Needs theme_load first; FONT is _apply_font's checked name.
+# fg-3 and comment are MUTED, or FG_DIM when MUTED is unreadable on BG_ALT (under 3:1, as in Nord).
 _apply_palette() {
-  local dir=$HOME/.jocasta/agent tmp
+  local dir=$HOME/.jocasta/agent tmp dim=${_THEME[MUTED]}
   [[ -d "$dir" ]] || return 0
+  _contrast_ok "$dim" "${_THEME[BG_ALT]}" || dim=${_THEME[FG_DIM]}
   tmp=$(mktemp "$dir/.palette.json.XXXXXX")
   printf '{"font": "%s", "colors": {"bg-0": "#%s", "bg-1": "#%s", "bg-2": "#%s", "bg-3": "#%s", "fg": "#%s", "fg-2": "#%s", "fg-3": "#%s", "comment": "#%s", "blue": "#%s", "cyan": "#%s", "yellow": "#%s", "red": "#%s", "green": "#%s", "purple": "#%s", "orange": "#%s"}}\n' \
     "$1" "${_THEME[BG]}" "${_THEME[BG_ALT]}" "${_THEME[BG_ALT]}" "${_THEME[BG_SEL]}" "${_THEME[FG]}" \
-    "${_THEME[FG_DIM]}" "${_THEME[MUTED]}" "${_THEME[MUTED]}" "${_THEME[C12]}" "${_THEME[C14]}" "${_THEME[C11]}" \
+    "${_THEME[FG_DIM]}" "$dim" "$dim" "${_THEME[C12]}" "${_THEME[C14]}" "${_THEME[C11]}" \
     "${_THEME[C9]}" "${_THEME[C10]}" "${_THEME[C13]}" "${_THEME[ACCENT_ALT]}" >"$tmp"
   mv -fT "$tmp" "$dir/palette.json"
 }

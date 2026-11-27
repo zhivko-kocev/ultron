@@ -2,7 +2,9 @@
 
 **An Arch Linux desktop built for working with coding agents: install it, sign your agent in, and work.**
 
-<!-- media -->
+![The ultron desktop switching themes: nord, catppuccin, tokyo night, gruvbox](docs/media/desktop-themes.gif)
+
+<sub>Recorded in the test VM (`vm/ultron-vm`). [Full-quality video](docs/media/desktop-themes.mp4).</sub>
 
 ## Why
 
@@ -23,6 +25,16 @@ ultron gives agents a place on the desktop and rules to follow. They show you di
 - **Light.** sway, foot, fuzzel, mako and a bash status bar: about 600 MB of RAM at an idle desktop before any agent starts ([measured](docs/baseline.md)). No daemons you didn't ask for.
 - **Yours.** One menu for everything (Super+Alt+Space), and a `~/.config/ultron/` folder where your settings, keys, packages and overrides live without forking anything.
 
+## See it
+
+| | |
+|---|---|
+| **Showing never moves you.** From workspace 6 an agent opens a review terminal and a page; the bar says `new 2 3`, and Super+A visits them when you choose. [video](docs/media/show-no-move.mp4) | ![show-no-move](docs/media/show-no-move.gif) |
+| **The attention queue.** Two agents are blocked on you in focus mode; `ultron attention --list` shows them oldest first and Super+A walks them. [video](docs/media/attention-queue.mp4) | ![attention-queue](docs/media/attention-queue.gif) |
+| **Root goes through you.** An agent's `sudo` opens a popup that names the exact command; nothing runs as root without your password. [video](docs/media/sudo-popup.mp4) | ![sudo-popup](docs/media/sudo-popup.gif) |
+| **Jocasta is the boss.** The boss pane beside Jocasta's `today` dock (what needs you, what is underway, briefs), on a fresh install before `/login`. [video](docs/media/jocasta-boss.mp4) | ![jocasta-boss](docs/media/jocasta-boss.gif) |
+| **Every key, searchable,** plus the emoji and colour pickers (Super+K, Super+Ctrl+E, Capture ▸ Colour). [video](docs/media/keys-pickers.mp4) | ![keys-pickers](docs/media/keys-pickers.gif) |
+
 ## Install
 
 You need a PC or laptop (x86-64, UEFI) whose disk can be **erased**, a USB stick, and a network connection (cable or Wi-Fi). Intel and AMD graphics work out of the box; NVIDIA runs on the open driver and is untested.
@@ -32,7 +44,7 @@ You need a PC or laptop (x86-64, UEFI) whose disk can be **erased**, a USB stick
 3. It asks for a user name, host name, time zone, keyboard layout, an optional dotfiles repo, which disk to erase (you type `wipe`), and the passwords. Then it installs Arch.
 4. Remove the stick, reboot, and type the disk password. The install continues by itself (it asks for your password once), then reboots into the desktop, which shows a short welcome.
 
-If the install stops on the first boot, it says which step failed; fix that and run `ultron install --first-boot`.
+If the install stops on the first boot, it says which step failed and waits for Enter before the desktop starts; fix that and run `ultron install --first-boot` (the next login on tty1 also tries again).
 
 **From a stock Arch ISO** ([archlinux.org/download](https://archlinux.org/download/)), boot it in UEFI mode, join Wi-Fi with `iwctl` if you need to, and run:
 

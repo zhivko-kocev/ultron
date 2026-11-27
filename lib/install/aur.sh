@@ -12,7 +12,9 @@ _aur_yay() {
   git clone https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin" || die "Couldn't clone yay-bin from the AUR."
   # makepkg -i installs through `sudo -k pacman`, which always asks for the password again; so build only
   # (yay-bin needs nothing beyond base-devel and git) and install with the sudo session ultron already holds.
-  (cd "$tmp/yay-bin" && makepkg --noconfirm && sudo pacman -U --noconfirm ./yay-bin-*.pkg.tar.*) || {
+  # Only the main package: this runs before the system step turns debug packages off, so makepkg also builds
+  # yay-bin-debug.
+  (cd "$tmp/yay-bin" && makepkg --noconfirm && sudo pacman -U --noconfirm ./yay-bin-[0-9]*.pkg.tar.*) || {
     rm -rf "$tmp"
     die "Building yay failed: read the error above, then rerun: ultron install aur"
   }

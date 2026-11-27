@@ -16,3 +16,6 @@
 .env
 *.env
 ntfy.env
+
+# Raw recordings (originals of docs/media)
+/docs/media/raw/

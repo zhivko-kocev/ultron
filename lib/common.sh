@@ -45,7 +45,8 @@ is_vm() { systemd-detect-virt -q --vm; }
 is_uefi() { [[ -d /sys/firmware/efi/efivars ]]; }
 is_laptop() { compgen -G "/sys/class/power_supply/BAT*" >/dev/null; }
 in_sway() { [[ -n "${SWAYSOCK:-}" ]] && swaymsg -t get_version >/dev/null 2>&1; }
-have() { command -v "$1" >/dev/null 2>&1; }
+# have PROGRAM: an installed program (not a shell function: `yay` below wraps the real one).
+have() { type -P "$1" >/dev/null 2>&1; }
 ensure_rundir() { mkdir -p "$R"; }
 
 # _in_list NEEDLE ITEM...: 0 when NEEDLE is one of the items.
